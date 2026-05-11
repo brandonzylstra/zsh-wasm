@@ -1,0 +1,53 @@
+E#ifndef have_Src_Zle_zle_vi_globals
+E#define have_Src_Zle_zle_vi_globals
+E
+Eextern int virangeflag;
+Eextern int wordflag;
+Eextern int vilinerange;
+Eextern struct vichange lastvichg;
+Eextern struct vichange curvichg;
+Eextern int vichgflag;
+Eextern int viinrepeat;
+Eextern int viinsbegin;
+Eextern void startvichange _((int im));
+Lstatic void startvitext _((int im));
+Eextern ZLE_INT_T vigetkey _((void));
+Lstatic int getvirange _((int wf));
+Lstatic int dovilinerange _((void));
+Eextern int viaddnext _((UNUSED(char**args)));
+Eextern int viaddeol _((UNUSED(char**args)));
+Eextern int viinsert _((UNUSED(char**args)));
+Eextern void viinsert_init _((void));
+Eextern int viinsertbol _((UNUSED(char**args)));
+Eextern int videlete _((UNUSED(char**args)));
+Eextern int videletechar _((char**args));
+Eextern int vichange _((UNUSED(char**args)));
+Eextern int visubstitute _((UNUSED(char**args)));
+Eextern int vichangeeol _((UNUSED(char**args)));
+Eextern int vichangewholeline _((char**args));
+Eextern int viyank _((UNUSED(char**args)));
+Eextern int viyankeol _((UNUSED(char**args)));
+Eextern int viyankwholeline _((UNUSED(char**args)));
+Eextern int vireplace _((UNUSED(char**args)));
+Eextern int vireplacechars _((UNUSED(char**args)));
+Eextern int vicmdmode _((UNUSED(char**args)));
+Eextern int viopenlinebelow _((UNUSED(char**args)));
+Eextern int viopenlineabove _((UNUSED(char**args)));
+Eextern int vioperswapcase _((UNUSED(char**args)));
+Eextern int viupcase _((UNUSED(char**args)));
+Eextern int vidowncase _((UNUSED(char**args)));
+Eextern int virepeatchange _((UNUSED(char**args)));
+Eextern int viindent _((UNUSED(char**args)));
+Eextern int viunindent _((UNUSED(char**args)));
+Eextern int vibackwarddeletechar _((char**args));
+Eextern int vikillline _((UNUSED(char**args)));
+Eextern int vijoin _((UNUSED(char**args)));
+Eextern int viswapcase _((UNUSED(char**args)));
+Eextern int vicapslockpanic _((UNUSED(char**args)));
+Eextern int visetbuffer _((char**args));
+Eextern int vikilleol _((UNUSED(char**args)));
+Eextern int vipoundinsert _((UNUSED(char**args)));
+Eextern int viquotedinsert _((char**args));
+Eextern int vidigitorbeginningofline _((char**args));
+E
+E#endif /* !have_Src_Zle_zle_vi_globals */

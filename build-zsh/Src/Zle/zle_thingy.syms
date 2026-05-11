@@ -1,0 +1,43 @@
+E#ifndef have_Src_Zle_zle_thingy_globals
+E#define have_Src_Zle_zle_thingy_globals
+E
+Xthingytab
+Eextern mod_import_variable HashTable thingytab;
+Lstatic void createthingytab _((void));
+Lstatic void emptythingytab _((UNUSED(HashTable ht)));
+Lstatic void scanemptythingies _((HashNode hn,UNUSED(int flags)));
+Lstatic Thingy makethingynode _((void));
+Lstatic void freethingynode _((HashNode hn));
+Xrefthingy
+Eextern mod_import_function Thingy refthingy _((Thingy th));
+Eextern void unrefthingy _((Thingy th));
+Eextern Thingy rthingy _((char*nam));
+Eextern Thingy rthingy_nocreate _((char*nam));
+Lstatic int bindwidget _((Widget w,Thingy t));
+Lstatic int unbindwidget _((Thingy t,int override));
+Eextern void freewidget _((Widget w));
+Xaddzlefunction
+Eextern mod_import_function Widget addzlefunction _((char*name,ZleIntFunc ifunc,int flags));
+Xdeletezlefunction
+Eextern mod_import_function void deletezlefunction _((Widget w));
+Eextern int bin_zle _((char*name,char**args,Options ops,UNUSED(int func)));
+Lstatic int bin_zle_list _((UNUSED(char*name),char**args,Options ops,UNUSED(char func)));
+Lstatic int bin_zle_refresh _((UNUSED(char*name),char**args,Options ops,UNUSED(char func)));
+Lstatic int bin_zle_mesg _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_unget _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_keymap _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic void scanlistwidgets _((HashNode hn,int list));
+Lstatic int bin_zle_del _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_link _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_new _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_complete _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int zle_usable _((void));
+Lstatic int bin_zle_flags _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_call _((char*name,char**args,UNUSED(Options ops),UNUSED(char func)));
+Eextern int fetchttyinfo;
+Lstatic int bin_zle_invalidate _((UNUSED(char*name),UNUSED(char**args),UNUSED(Options ops),UNUSED(char func)));
+Lstatic int bin_zle_fd _((char*name,char**args,Options ops,UNUSED(char func)));
+Lstatic int bin_zle_transform _((char*name,char**args,Options ops,UNUSED(char func)));
+Eextern void init_thingies _((void));
+E
+E#endif /* !have_Src_Zle_zle_thingy_globals */

@@ -1,0 +1,17 @@
+E#ifndef have_Src_Modules_langinfo_globals
+E#define have_Src_Modules_langinfo_globals
+E
+E#ifdef HAVE_NL_LANGINFO
+L#ifdef HAVE_NL_LANGINFO
+Lstatic HashNode getlanginfo _((UNUSED(HashTable ht),const char*name));
+Lstatic void scanlanginfo _((UNUSED(HashTable ht),ScanFunc func,int flags));
+E#endif /* HAVE_NL_LANGINFO */
+L#endif /* HAVE_NL_LANGINFO */
+Eextern int setup_ _((UNUSED(Module m)));
+Eextern int features_ _((Module m,char***features));
+Eextern int enables_ _((Module m,int**enables));
+Eextern int boot_ _((UNUSED(Module m)));
+Eextern int cleanup_ _((Module m));
+Eextern int finish_ _((UNUSED(Module m)));
+E
+E#endif /* !have_Src_Modules_langinfo_globals */
