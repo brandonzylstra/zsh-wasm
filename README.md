@@ -1,18 +1,17 @@
-Bash wasm
-==========
+Zsh Wasm
+========
 
-Compile the Bash Shell for wasm using emscripten.
+Compile the Z Shell for web assembly using emscripten.
 
-I originally made this as an april fools day joke for a youtube video but
-like... where's the joke? it actually works lol.
+I'm attempting this to support the Zsh cheatsheet on [Ruby.CodeCompared.To/Zsh](https://Ruby.CodeCompared.To/Zsh)
+since I use Zsh far more than Bash, and it's the default shell on macOS,
+the OS historically used by a majority of Rubyists.
 
-- website: https://bash-wasm.ysap.sh
-- video: https://www.youtube.com/watch?v=TEq-6AqMFBI
 
 How To
 ------
 
-This works on my machine - YMMV
+Hoping (something like) this will work on my machine 😅
 
 ```
 mkdir -p build
@@ -26,4 +25,4 @@ python3 -mhttp.server
 License
 --------
 
-GPLv3
+GPLv3, but soon to be released under [the Zsh License](https://Ruby.CodeCompared.To/Zsh) as soon as Bash is removed.
