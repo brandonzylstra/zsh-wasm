@@ -1,5 +1,0 @@
-#define MODULE_DIR "/usr/local/lib/zsh/5.9"
-#define SITESCRIPT_DIR "/usr/local/share/zsh/scripts"
-#define SCRIPT_DIR "/usr/local/share/zsh/5.9/scripts"
-#define SITEFPATH_DIR "/usr/local/share/zsh/site-functions"
-#define FPATH_DIR "/usr/local/share/zsh/5.9/functions"

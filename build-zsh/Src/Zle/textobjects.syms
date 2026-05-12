@@ -1,7 +1,0 @@
-E#ifndef have_Src_Zle_textobjects_globals
-E#define have_Src_Zle_textobjects_globals
-E
-Eextern int selectword _((UNUSED(char**args)));
-Eextern int selectargument _((UNUSED(char**args)));
-E
-E#endif /* !have_Src_Zle_textobjects_globals */
