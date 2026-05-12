@@ -9,7 +9,7 @@ since Zsh is the default shell on macOS, the OS historically used by a majority 
 Demo
 ----
 
-Open `web/zsh-test.html` (served via an HTTP server — see below) to see zsh running in the browser.
+Open `web/index.html` (served via an HTTP server — see below) to see zsh running in the browser.
 
 How To Build
 ------------
@@ -142,4 +142,4 @@ Known Limitations
 License
 -------
 
-GPLv3, but soon to be released under [the Zsh License](https://Ruby.CodeCompared.To/Zsh) as soon as Bash is removed.
+[The Zsh License](https://github.com/zsh-users/zsh/blob/master/LICENCE).
