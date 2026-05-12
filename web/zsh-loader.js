@@ -26,6 +26,11 @@ async function runZshScript(src, stdout, stderr) {
     const text = src + '\n';
     module.FS.writeFile('/script', text);
     module.callMain(['/script']);
+
+    if (stdout) {
+        var el = document.querySelector(stdout);
+        if (el) el.classList.remove('loading');
+    }
 }
 
 globalThis.runZshScript = runZshScript;

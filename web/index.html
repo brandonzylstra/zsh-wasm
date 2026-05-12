@@ -4,6 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zsh Wasm</title>
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg">
     <script src="./zsh.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -74,10 +75,34 @@
         pre, code {
             font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
             font-size: 0.85rem;
+            line-height: 1.5;
         }
 
         pre.code   { color: #e6edf3; white-space: pre; overflow-x: auto; }
         pre.output { color: #3fb950; white-space: pre; min-height: 1.2em; }
+
+        @keyframes shimmer {
+            0%   { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+
+        pre.output.loading {
+            color: transparent;
+            background: linear-gradient(90deg, #1c2128 25%, #2d333b 50%, #1c2128 75%);
+            background-size: 200% 100%;
+            animation: shimmer 1.5s ease-in-out infinite;
+            min-height: 3.5em;
+            border-radius: 4px;
+        }
+
+        @media (max-width: 640px) {
+            body { padding: 1rem; }
+
+            .example-body { grid-template-columns: 1fr; }
+            .pane + .pane { border-left: none; border-top: 1px solid #30363d; }
+
+            header h1 { font-size: 1.5rem; }
+        }
     </style>
 </head>
 <body>
@@ -312,6 +337,8 @@ END
 document.querySelectorAll('script[type="text/zsh"]').forEach(s => {
     const pre = document.getElementById('src-' + s.dataset.id);
     if (pre) pre.textContent = s.textContent.trim();
+    const out = document.querySelector(s.dataset.stdout);
+    if (out) out.classList.add('loading');
 });
 </script>
 <script src="./zsh-loader.js" type="module"></script>
