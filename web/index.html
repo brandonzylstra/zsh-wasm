@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zsh Wasm</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <script src="./zsh.js"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -17,6 +18,7 @@
             line-height: 1.6;
         }
 
+        /* ── Header ── */
         header {
             max-width: 860px;
             margin: 0 auto 2.5rem;
@@ -24,11 +26,21 @@
             padding-bottom: 1.5rem;
         }
 
-        header h1 { font-size: 2rem; color: #f0f6fc; }
+        header h1 {
+            font-size: 2rem;
+            color: #f0f6fc;
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+        }
+
+        .logo { width: 2rem; height: 2rem; flex-shrink: 0; }
+
         header p  { color: #8b949e; margin-top: 0.4rem; }
         header a  { color: #58a6ff; text-decoration: none; }
         header a:hover { text-decoration: underline; }
 
+        /* ── Examples ── */
         .examples {
             max-width: 860px;
             margin: 0 auto;
@@ -41,6 +53,12 @@
             border: 1px solid #30363d;
             border-radius: 8px;
             overflow: hidden;
+            transition: border-color 0.15s, box-shadow 0.15s;
+        }
+
+        .example:hover {
+            border-color: #388bfd;
+            box-shadow: 0 0 0 3px rgba(56, 139, 253, 0.1);
         }
 
         .example-header {
@@ -52,15 +70,39 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             border-bottom: 1px solid #30363d;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
         }
+
+        .header-controls { display: flex; gap: 0.4rem; }
+
+        .hdr-btn {
+            background: #21262d;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #8b949e;
+            cursor: pointer;
+            font-size: 0.7rem;
+            font-family: inherit;
+            padding: 0.2rem 0.5rem;
+            line-height: 1.4;
+            text-transform: none;
+            letter-spacing: 0;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+
+        .hdr-btn:hover       { color: #e6edf3; border-color: #8b949e; }
+        .copy-btn.copied     { color: #3fb950; border-color: #3fb950; }
+        .run-btn:hover       { background: #238636; border-color: #2ea043; color: #f0f6fc; }
+        .run-btn[data-busy]  { background: #1f6feb; border-color: #388bfd; color: #f0f6fc; cursor: wait; }
 
         .example-body {
             display: grid;
             grid-template-columns: 1fr 1fr;
         }
 
-        .pane { padding: 1rem; }
-
+        .pane { padding: 1rem; position: relative; }
         .pane + .pane { border-left: 1px solid #30363d; }
 
         .pane-label {
@@ -72,18 +114,63 @@
             margin-bottom: 0.5rem;
         }
 
-        pre, code {
+        /* ── CodeMirror 5 base overrides ── */
+        .CodeMirror {
+            background: transparent !important;
             font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
             font-size: 0.85rem;
             line-height: 1.5;
+            height: auto;
+            color: #e6edf3;
         }
 
-        pre.code   { color: #e6edf3; white-space: pre; overflow-x: auto; }
-        pre.output { color: #3fb950; white-space: pre; min-height: 1.2em; }
+        .CodeMirror-scroll     { overflow-x: auto !important; overflow-y: hidden !important; }
+        .CodeMirror-gutters    { display: none; }
+        .CodeMirror-cursor     { border-left-color: #58a6ff !important; }
+        .CodeMirror-selected,
+        .CodeMirror-focused .CodeMirror-selected { background: #264f78 !important; }
+        .CodeMirror-activeline-background { background: rgba(255,255,255,0.04) !important; }
 
+        /* ── Custom syntax theme (GitHub dark palette) ── */
+        .cm-s-zsh-wasm.CodeMirror          { color: #e6edf3; }
+        .cm-s-zsh-wasm .cm-keyword         { color: #ff7b72; }
+        .cm-s-zsh-wasm .cm-builtin         { color: #ffa657; }
+        .cm-s-zsh-wasm .cm-def             { color: #79c0ff; }
+        .cm-s-zsh-wasm .cm-variable        { color: #79c0ff; }
+        .cm-s-zsh-wasm .cm-variable-2      { color: #79c0ff; }
+        .cm-s-zsh-wasm .cm-string          { color: #a5d6ff; }
+        .cm-s-zsh-wasm .cm-string-2        { color: #a5d6ff; }
+        .cm-s-zsh-wasm .cm-comment         { color: #8b949e; font-style: italic; }
+        .cm-s-zsh-wasm .cm-number          { color: #f2cc60; }
+        .cm-s-zsh-wasm .cm-operator        { color: #e6edf3; }
+        .cm-s-zsh-wasm .cm-atom            { color: #79c0ff; }
+        .cm-s-zsh-wasm .cm-meta            { color: #8b949e; }
+
+        /* ── Code / output ── */
+        pre.code   { overflow-x: auto; }
+        pre.output {
+            font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+            font-size: 0.85rem;
+            line-height: 1.5;
+            color: #3fb950;
+            white-space: pre;
+            min-height: 1.2em;
+        }
+
+        /* ── Loading / reveal animations ── */
         @keyframes shimmer {
             0%   { background-position: 200% 0; }
             100% { background-position: -200% 0; }
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50%       { opacity: 0; }
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(3px); }
+            to   { opacity: 1; transform: translateY(0); }
         }
 
         pre.output.loading {
@@ -95,12 +182,37 @@
             border-radius: 4px;
         }
 
+        pre.output.loading::after {
+            content: '▋';
+            color: #3fb950;
+            animation: blink 1s step-end infinite;
+        }
+
+        pre.output.revealed {
+            animation: fadeIn 0.35s ease forwards;
+        }
+
+        /* ── Footer ── */
+        footer {
+            max-width: 860px;
+            margin: 3rem auto 1rem;
+            padding-top: 1.5rem;
+            border-top: 1px solid #30363d;
+            font-size: 0.8rem;
+            color: #6e7681;
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        footer a { color: #8b949e; text-decoration: none; }
+        footer a:hover { color: #58a6ff; text-decoration: underline; }
+
+        /* ── Responsive ── */
         @media (max-width: 640px) {
             body { padding: 1rem; }
-
             .example-body { grid-template-columns: 1fr; }
             .pane + .pane { border-left: none; border-top: 1px solid #30363d; }
-
             header h1 { font-size: 1.5rem; }
         }
     </style>
@@ -108,7 +220,10 @@
 <body>
 
 <header>
-    <h1>Zsh Wasm</h1>
+    <h1>
+        <img src="./logo.svg" class="logo" alt="" width="32" height="32">
+        Zsh Wasm
+    </h1>
     <p>
         Zsh 5.9 compiled to <a href="https://webassembly.org">WebAssembly</a> via
         <a href="https://emscripten.org">Emscripten</a>.
@@ -332,16 +447,21 @@ done <<END
 END
 </script>
 
-<!-- Populate source panes from script tag text, then run the loader -->
+<!-- CodeMirror 5 -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+
+<!-- Mark all output panes as loading before the module runs -->
 <script>
-document.querySelectorAll('script[type="text/zsh"]').forEach(s => {
-    const pre = document.getElementById('src-' + s.dataset.id);
-    if (pre) pre.textContent = s.textContent.trim();
-    const out = document.querySelector(s.dataset.stdout);
-    if (out) out.classList.add('loading');
-});
+document.querySelectorAll('pre.output').forEach(el => el.classList.add('loading'));
 </script>
 <script src="./zsh-loader.js" type="module"></script>
+
+<footer>
+    <span>Zsh 5.9 is distributed under the <a href="https://sourceforge.net/p/zsh/code/ci/master/tree/LICENCE">Zsh License</a>.</span>
+    <span>Zsh icon from <a href="https://devicons.dev">devicons</a>.</span>
+    <span><a href="https://github.com/brandonzylstra/zsh-wasm">View source on GitHub</a>.</span>
+</footer>
 
 </body>
 </html>
