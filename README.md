@@ -83,7 +83,38 @@ sed -i '' 's/^ZSH_TERM_H = $/ZSH_TERM_H = term.h/' Config/defs.mk
 echo '#include <term.h>' > Src/zshterm.h
 ```
 
-### 5. Build
+### 5. Disable ZLE and completion modules
+
+ZLE (the interactive line editor) and the completion system are not usable without
+a real terminal, so we exclude them to reduce binary size (~350KB savings).
+
+First, patch the source to remove a spurious dependency on the complete module:
+
+```
+# zutil.mdd: remove moddeps="zsh/complete" line
+sed -i '' '/^moddeps="zsh\/complete"$/d' ../zsh-5.9/Src/Modules/zutil.mdd
+
+# zutil.c: inline the one call that depended on complete
+sed -i '' 's/set_list_array(args\[1\], zstyle_list);/setaparam(args[1], zlinklist2array(zstyle_list, 1));/' \
+  ../zsh-5.9/Src/Modules/zutil.c
+```
+
+Then deactivate the modules in config.modules:
+
+```
+sed -i '' -E \
+  -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)link=static/\1link=no/' \
+  -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)load=yes/\1load=no/' \
+  config.modules
+```
+
+Then regenerate the Makefiles:
+
+```
+emmake make prep
+```
+
+### 6. Build
 
 ```
 emmake make \
@@ -94,7 +125,7 @@ emmake make \
     -sEXPORT_NAME=createZshModule"
 ```
 
-### 6. Deploy to web
+### 7. Deploy to web
 
 ```
 cp Src/zsh     ../web/zsh.js
@@ -102,7 +133,7 @@ cp Src/zsh.wasm ../web/zsh.wasm
 cd ..
 ```
 
-### 7. Test
+### 8. Test
 
 ```
 cd web
@@ -137,8 +168,8 @@ Known Limitations
   unsupported; you'll see harmless warnings in the console.
 - **No filesystem persistence** — the emscripten virtual FS is reset each module
   instantiation.
-- **ZLE is no-op** — interactive line editing requires a real terminal; it is
-  compiled in but its terminal calls return immediately.
+- **No ZLE** — the interactive line editor and completion system are excluded from
+  the build (they require a real terminal and add ~350KB to the binary).
 
 License
 -------
