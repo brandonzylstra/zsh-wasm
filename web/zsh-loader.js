@@ -1,3 +1,8 @@
+function isRuntimeNoise(txt) {
+    return txt.startsWith('warning: unsupported syscall:') ||
+           txt.startsWith('program exited (with status:');
+}
+
 async function runZshScript(src, stdout, stderr) {
     var opts = {
         noInitialRun: true,
@@ -12,7 +17,9 @@ async function runZshScript(src, stdout, stderr) {
     if (stderr) {
         var el = document.querySelector(stderr);
         if (!el) throw `stderr selector ${stderr} does not exist`;
-        opts.printErr = function (txt) { el.textContent += txt + '\n'; };
+        opts.printErr = function (txt) { if (!isRuntimeNoise(txt)) el.textContent += txt + '\n'; };
+    } else {
+        opts.printErr = function (txt) { if (!isRuntimeNoise(txt)) console.error(txt); };
     }
 
     var module = await createZshModule(opts);

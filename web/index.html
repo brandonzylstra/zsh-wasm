@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Zsh Wasm</title>
+    <script src="./zsh.js"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: #0d1117;
+            color: #e6edf3;
+            padding: 2rem;
+            line-height: 1.6;
+        }
+
+        header {
+            max-width: 860px;
+            margin: 0 auto 2.5rem;
+            border-bottom: 1px solid #30363d;
+            padding-bottom: 1.5rem;
+        }
+
+        header h1 { font-size: 2rem; color: #f0f6fc; }
+        header p  { color: #8b949e; margin-top: 0.4rem; }
+        header a  { color: #58a6ff; text-decoration: none; }
+        header a:hover { text-decoration: underline; }
+
+        .examples {
+            max-width: 860px;
+            margin: 0 auto;
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .example {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .example-header {
+            background: #1c2128;
+            padding: 0.6rem 1rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: #8b949e;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #30363d;
+        }
+
+        .example-body {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .pane { padding: 1rem; }
+
+        .pane + .pane { border-left: 1px solid #30363d; }
+
+        .pane-label {
+            font-size: 0.7rem;
+            font-weight: 600;
+            color: #6e7681;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.5rem;
+        }
+
+        pre, code {
+            font-family: "SF Mono", "Fira Code", "Cascadia Code", Menlo, monospace;
+            font-size: 0.85rem;
+        }
+
+        pre.code   { color: #e6edf3; white-space: pre; overflow-x: auto; }
+        pre.output { color: #3fb950; white-space: pre; min-height: 1.2em; }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Zsh Wasm</h1>
+    <p>
+        Zsh 5.9 compiled to <a href="https://webassembly.org">WebAssembly</a> via
+        <a href="https://emscripten.org">Emscripten</a>.
+        Each of the examples runs a real zsh interpreter in your browser.<br>
+        The source code is available on <a href="https://github.com/brandonzylstra/zsh-wasm">GitHub</a>.
+    </p>
+</header>
+
+<div class="examples">
+
+    <div class="example">
+        <div class="example-header">Variables &amp; Strings</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-vars"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-vars"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">String Operations</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-str"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-str"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Parameter Expansion</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-param"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-param"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Arithmetic</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-math"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-math"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Arrays (1-indexed)</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-arr"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-arr"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Associative Arrays</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-hash"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-hash"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Functions</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-fn"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-fn"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Loops</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-loop"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-loop"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Conditionals</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-cond"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-cond"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Here Documents</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-here"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-here"></pre></div>
+        </div>
+    </div>
+
+</div>
+
+<!-- zsh scripts — browser ignores unknown type; loader executes them -->
+<script type="text/zsh" data-id="vars" data-stdout="#out-vars" data-stderr="#out-vars">
+name="World"
+echo "Hello, $name!"
+echo "Version: $ZSH_VERSION"
+echo "Shell:   $0"
+</script>
+
+<script type="text/zsh" data-id="str" data-stdout="#out-str" data-stderr="#out-str">
+s="Hello, World!"
+echo "original: $s"
+echo "upper:    ${s:u}"
+echo "lower:    ${s:l}"
+echo "length:   ${#s}"
+echo "slice:    ${s:0:5}"
+echo "replace:  ${s/World/Zsh}"
+</script>
+
+<script type="text/zsh" data-id="param" data-stdout="#out-param" data-stderr="#out-param">
+unset x
+echo "${x:-default}"       # use default if unset
+x="set"
+echo "${x:-default}"       # use value when set
+echo "${x:+was set}"       # alternate if set
+
+file="/home/user/doc.txt"
+echo "${file:t}"           # tail (basename)
+echo "${file:h}"           # head (dirname)
+echo "${file:e}"           # extension
+echo "${file:r}"           # remove extension
+</script>
+
+<script type="text/zsh" data-id="math" data-stdout="#out-math" data-stderr="#out-math">
+echo $(( 6 * 7 ))
+echo $(( 2 ** 10 ))
+echo $(( 17 % 5 ))
+printf "%.4f\n" $(( 355.0 / 113.0 ))
+x=10
+(( x += 5 ))
+echo "x is now $x"
+</script>
+
+<script type="text/zsh" data-id="arr" data-stdout="#out-arr" data-stderr="#out-arr">
+fruits=(apple banana cherry date)
+echo "first:  $fruits[1]"
+echo "last:   $fruits[-1]"
+echo "count:  ${#fruits}"
+echo "slice:  $fruits[2,3]"
+echo "all:    $fruits"
+fruits+=(elderberry)
+echo "added:  $fruits[-1]"
+</script>
+
+<script type="text/zsh" data-id="hash" data-stdout="#out-hash" data-stderr="#out-hash">
+typeset -A capitals
+capitals=(
+  France  Paris
+  Japan   Tokyo
+  Brazil  Brasilia
+)
+echo "France: $capitals[France]"
+echo "Japan:  $capitals[Japan]"
+echo "Keys:   ${(k)capitals}"
+echo "Values: ${(v)capitals}"
+</script>
+
+<script type="text/zsh" data-id="fn" data-stdout="#out-fn" data-stderr="#out-fn">
+greet() {
+  local name=$1
+  local greeting=${2:-Hello}
+  echo "$greeting, $name!"
+}
+greet "Alice"
+greet "Bob" "Hi"
+
+# zsh convention: store return value
+# in $REPLY to avoid a subshell
+double() { REPLY=$(( $1 * 2 )); }
+double 21
+echo "double 21 = $REPLY"
+</script>
+
+<script type="text/zsh" data-id="loop" data-stdout="#out-loop" data-stderr="#out-loop">
+for fruit in apple banana cherry; do
+  echo "fruit: $fruit"
+done
+
+for (( i = 1; i <= 3; i++ )); do
+  echo "i = $i"
+done
+
+n=3
+while (( n > 0 )); do
+  echo "countdown: $n"
+  (( n-- ))
+done
+</script>
+
+<script type="text/zsh" data-id="cond" data-stdout="#out-cond" data-stderr="#out-cond">
+x=42
+if (( x > 100 )); then
+  echo "big"
+elif (( x > 10 )); then
+  echo "medium"
+else
+  echo "small"
+fi
+
+lang="zsh"
+[[ $lang == z* ]] && echo "$lang starts with z"
+[[ $lang != bash ]] && echo "not bash!"
+</script>
+
+<script type="text/zsh" data-id="here" data-stdout="#out-here" data-stderr="#out-here">
+while IFS= read -r line; do
+  print "$line"
+done <<EOF
+  line one
+  line two
+  line three
+EOF
+
+name="Zsh"
+while IFS= read -r line; do
+  print "$line"
+done <<END
+  Hello from $name!
+  Version $ZSH_VERSION
+END
+</script>
+
+<!-- Populate source panes from script tag text, then run the loader -->
+<script>
+document.querySelectorAll('script[type="text/zsh"]').forEach(s => {
+    const pre = document.getElementById('src-' + s.dataset.id);
+    if (pre) pre.textContent = s.textContent.trim();
+});
+</script>
+<script src="./zsh-loader.js" type="module"></script>
+
+</body>
+</html>

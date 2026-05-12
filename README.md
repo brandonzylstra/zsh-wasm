@@ -106,7 +106,7 @@ cd ..
 ```
 cd web
 python3 -m http.server
-# open http://localhost:8000/zsh-test.html
+# open http://localhost:8000/
 ```
 
 Using in HTML
