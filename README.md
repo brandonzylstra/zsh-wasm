@@ -53,7 +53,8 @@ emconfigure ../zsh-5.9/configure \
   --disable-dynamic-nss \
   CPPFLAGS="-I$STUB/include" \
   LDFLAGS="-L$STUB/lib" \
-  LIBS="-lncurses"
+  LIBS="-lncurses" \
+  CFLAGS="-Os"
 ```
 
 ### 4. Patch generated config.h
