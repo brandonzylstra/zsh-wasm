@@ -309,6 +309,22 @@
     </div>
 
     <div class="example">
+        <div class="example-header">Case</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-case"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-case"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Globbing</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-glob"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-glob"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
         <div class="example-header">Here Documents</div>
         <div class="example-body">
             <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-here"></pre></div>
@@ -429,6 +445,49 @@ fi
 lang="zsh"
 [[ $lang == z* ]] && echo "$lang starts with z"
 [[ $lang != bash ]] && echo "not bash!"
+</script>
+
+<script type="text/zsh" data-id="case" data-stdout="#out-case" data-stderr="#out-case">
+for lang in zsh python ruby javascript other; do
+  case $lang in
+    zsh)                echo "$lang — Z Shell" ;;
+    python|py)          echo "$lang — Python" ;;
+    ruby|rb)            echo "$lang — Ruby" ;;
+    javascript|js|ts)   echo "$lang — JS / TS" ;;
+    *)                  echo "$lang — unknown" ;;
+  esac
+done
+
+# version pattern matching
+for ver in 5.9 6.0 4.2; do
+  case $ver in
+    5.*) echo "$ver: current series" ;;
+    6.*) echo "$ver: next gen" ;;
+    *)   echo "$ver: old" ;;
+  esac
+done
+</script>
+
+<script type="text/zsh" data-id="glob" data-stdout="#out-glob" data-stderr="#out-glob">
+for f in main util test; do : > /tmp/${f}.zsh; done
+: > /tmp/README.md
+: > /tmp/data.log
+cd /tmp
+
+echo "--- *.zsh"
+for f in *.zsh; echo "  $f"
+
+echo "--- *.{zsh,md}"
+for f in *.{zsh,md}; echo "  $f"
+
+setopt extendedglob
+echo "--- ^*.log  (negate)"
+for f in ^*.log; echo "  $f"
+
+echo "--- *(.)  files only"
+for f in *(.); echo "  $f"
+
+# in real shells: **/*.zsh matches recursively
 </script>
 
 <script type="text/zsh" data-id="here" data-stdout="#out-here" data-stderr="#out-here">
