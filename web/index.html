@@ -472,10 +472,16 @@ done
 for f in main util test; do : > /tmp/${f}.zsh; done
 : > /tmp/README.md
 : > /tmp/data.log
+mkdir -p /tmp/lib
+: > /tmp/lib/helper.zsh
+: > /tmp/lib/config.zsh
 cd /tmp
 
-echo "--- *.zsh"
+echo "--- *.zsh  (current dir)"
 for f in *.zsh; echo "  $f"
+
+echo "--- **/*.zsh  (recursive)"
+for f in **/*.zsh; echo "  $f"
 
 echo "--- *.{zsh,md}"
 for f in *.{zsh,md}; echo "  $f"
@@ -486,8 +492,6 @@ for f in ^*.log; echo "  $f"
 
 echo "--- *(.)  files only"
 for f in *(.); echo "  $f"
-
-# in real shells: **/*.zsh matches recursively
 </script>
 
 <script type="text/zsh" data-id="here" data-stdout="#out-here" data-stderr="#out-here">
@@ -513,6 +517,7 @@ END
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
 
 
+<script>var ZshWasmConfig = { fs: 'idbfs' };</script>
 <script src="./zsh-loader.js" type="module"></script>
 
 <footer>

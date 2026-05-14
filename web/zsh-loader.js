@@ -46,6 +46,49 @@ function isRuntimeNoise(txt) {
            txt.startsWith('program exited (with status:');
 }
 
+const ZSH_FS = (window.ZshWasmConfig?.fs ?? 'memfs').toLowerCase();
+const IDBFS_MOUNT = '/home/user';
+
+// Zsh functions that replace common external binaries (which require fork/exec, unavailable in wasm).
+const BUILTINS_PREAMBLE = `\
+touch() { local f; for f; do : >> "$f"; done }
+cat()   { local f; for f; do print -r -- "$(<$f)"; done }
+ls() {
+  local show_all=0 long=0 recursive=0
+  local -a args
+  for a; do
+    if [[ $a == -* ]]; then
+      [[ $a == *[aA]* ]] && show_all=1
+      [[ $a == *l*   ]] && long=1
+      [[ $a == *R*   ]] && recursive=1
+    else
+      args+=($a)
+    fi
+  done
+  local d=\${args[1]:-.}
+  local -a files
+  if   (( recursive && show_all )); then files=($d/**/*(DN))
+  elif (( recursive ));             then files=($d/**/*(N))
+  elif (( show_all ));              then files=($d/*(DN))
+  else                                   files=($d/*(N))
+  fi
+  local f name
+  for f in $files; do
+    (( recursive )) && name="\${f#\${d%/}/}" || name="\${f:t}"
+    if (( long )); then
+      if   [[ -d $f ]]; then print "d  $name"
+      elif [[ -L $f ]]; then print "l  $name"
+      else                   print "-  $name"
+      fi
+    else
+      print $name
+    fi
+  done
+}
+cp() { print -r -- "$(<$1)" > "$2" }
+mv() { cp "$1" "$2" && zf_rm "$1" }
+`;
+
 async function runZshScript(src, stdout, stderr) {
     var opts = { noInitialRun: true };
 
@@ -67,8 +110,22 @@ async function runZshScript(src, stdout, stderr) {
     }
 
     var module = await createZshModule(opts);
-    module.FS.writeFile('/script', src + '\n');
+
+    if (ZSH_FS === 'idbfs') {
+        try { module.FS.mkdir('/home'); } catch(e) {}
+        try { module.FS.mkdir(IDBFS_MOUNT); } catch(e) {}
+        module.FS.mount(module.FS.filesystems['IDBFS'], {}, IDBFS_MOUNT);
+        await new Promise((res, rej) =>
+            module.FS.syncfs(true, err => err ? rej(err) : res()));
+    }
+
+    module.FS.writeFile('/script', BUILTINS_PREAMBLE + src + '\n');
     module.callMain(['/script']);
+
+    if (ZSH_FS === 'idbfs') {
+        await new Promise((res, rej) =>
+            module.FS.syncfs(false, err => err ? rej(err) : res()));
+    }
 
     if (outEl) {
         outEl.classList.remove('loading');
