@@ -87,5 +87,7 @@ for (const s of document.querySelectorAll('script[type="text/zsh"]')) {
         }
     }
 
-    await runZshScript(editor ? editor.getValue() : s.textContent, stdout, stderr);
+    if (s.dataset.autoRun === 'true') {
+        await runZshScript(editor ? editor.getValue() : s.textContent, stdout, stderr);
+    }
 }
