@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Patches build-zsh/config.h after emconfigure or make prep regenerates it.
+# Two configure tests produce wrong results under Emscripten; this fixes them.
+# Safe to run multiple times — uses line-anchored regex so it never double-patches.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+CONFIG_H="${1:-$ROOT/build-zsh/config.h}"
+
+python3 - "$CONFIG_H" <<'PYEOF'
+import sys, re
+
+path = sys.argv[1]
+with open(path) as f:
+    src = f.read()
+
+orig = src
+
+patches = [
+    # Disable setresuid/setresgid — declared in Emscripten libc but missing from its headers
+    (r'^#define HAVE_SETRESGID 1',         '/* #define HAVE_SETRESGID 1 */'),
+    (r'^#define HAVE_SETRESUID 1',         '/* #define HAVE_SETRESUID 1 */'),
+    # Enable tgoto prototype (ncurses stub doesn't auto-declare it)
+    (r'^/\* #undef TGOTO_PROTO_MISSING \*/', '#define TGOTO_PROTO_MISSING 1'),
+    # Enable term.h support so ncurses headers are included transitively
+    (r'^/\* #undef ZSH_HAVE_TERM_H \*/',    '#define ZSH_HAVE_TERM_H 1'),
+]
+
+for pattern, replacement in patches:
+    src = re.sub(pattern, replacement, src, flags=re.MULTILINE)
+
+if src == orig:
+    print('config.h: already patched, nothing to do')
+else:
+    with open(path, 'w') as f:
+        f.write(src)
+    print('config.h: patches applied')
+PYEOF

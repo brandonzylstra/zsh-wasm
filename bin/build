@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Rebuilds zsh.wasm from the configured build-zsh/ tree and deploys to web/.
+#
+# Prerequisites (one-time setup — see README):
+#   1. zsh-5.9/ source directory
+#   2. ncurses-stub built (cd ncurses-stub && emcc -c … && emar …)
+#   3. build-zsh/ configured via emconfigure
+#   4. zutil.mdd / zutil.c source patches applied
+#
+# After that, just run:   bin/build
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+BUILD="$ROOT/build-zsh"
+STUB="$ROOT/ncurses-stub"
+
+cd "$BUILD"
+
+echo "==> make prep (regenerates Makefiles from config.modules)"
+emmake make prep
+
+echo "==> patching config.h"
+"$ROOT/bin/patch-config"
+
+echo "==> building"
+emmake make \
+  LDFLAGS="-L$STUB/lib \
+    -sFORCE_FILESYSTEM=1 \
+    -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
+    -sMODULARIZE=1 \
+    -sEXPORT_NAME=createZshModule \
+    -lidbfs.js"
+
+echo "==> deploying to web/"
+cp Src/zsh      "$ROOT/web/zsh.js"
+cp Src/zsh.wasm "$ROOT/web/zsh.wasm"
+
+SIZE=$(du -h "$ROOT/web/zsh.wasm" | cut -f1)
+echo "Done — zsh.wasm is $SIZE"

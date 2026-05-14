@@ -120,9 +120,10 @@ emmake make prep
 emmake make \
   LDFLAGS="-L$(pwd)/../ncurses-stub/lib \
     -sFORCE_FILESYSTEM=1 \
-    -sEXPORTED_RUNTIME_METHODS=FS,callMain \
+    -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
     -sMODULARIZE=1 \
-    -sEXPORT_NAME=createZshModule"
+    -sEXPORT_NAME=createZshModule \
+    -lidbfs.js"
 ```
 
 ### 7. Deploy to web
@@ -161,13 +162,30 @@ for f in $fruits; echo "  $f"
 
 Or call `runZshScript(src, stdoutSelector, stderrSelector)` directly from JavaScript.
 
+### Filesystem backend
+
+By default the loader uses an in-memory filesystem (MEMFS) that resets on each
+run. To opt into IndexedDB-backed persistence (IDBFS), set `ZshWasmConfig`
+before loading the loader:
+
+```html
+<script>
+  var ZshWasmConfig = { fs: 'idbfs' };
+</script>
+<script src="./zsh-loader.js" type="module"></script>
+```
+
+With IDBFS, files written under `/home/user` persist across page reloads and
+are shared between all examples on the page (each run syncs in from IndexedDB
+before executing and syncs out after).
+
 Known Limitations
 -----------------
 
 - **No job control** — `sigsuspend`, `prlimit`, `getrusage` syscalls are stubs or
   unsupported; you'll see harmless warnings in the console.
-- **No filesystem persistence** — the emscripten virtual FS is reset each module
-  instantiation.
+- **No filesystem persistence by default** — use `ZshWasmConfig = { fs: 'idbfs' }`
+  to enable IndexedDB-backed persistence.
 - **No ZLE** — the interactive line editor and completion system are excluded from
   the build (they require a real terminal and add ~350KB to the binary).
 
