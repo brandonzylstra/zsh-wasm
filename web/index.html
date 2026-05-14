@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Zsh Wasm</title>
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">
+    <link rel="preload" href="./zsh.wasm" as="fetch" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
     <script src="./zsh.js"></script>
     <style>
@@ -94,8 +95,9 @@
 
         .hdr-btn:hover       { color: #e6edf3; border-color: #8b949e; }
         .copy-btn.copied     { color: #3fb950; border-color: #3fb950; }
-        .run-btn:hover       { background: #238636; border-color: #2ea043; color: #f0f6fc; }
-        .run-btn[data-busy]  { background: #1f6feb; border-color: #388bfd; color: #f0f6fc; cursor: wait; }
+        .run-btn             { background: #238636; border-color: #2ea043; color: #f0f6fc; }
+        .run-btn:hover       { background: #2ea043; border-color: #3fb950; box-shadow: 0 0 8px #2ea04366; }
+        .run-btn[data-busy]  { background: #1f6feb; border-color: #388bfd; color: #f0f6fc; cursor: wait; box-shadow: none; }
 
         .example-body {
             display: grid;
