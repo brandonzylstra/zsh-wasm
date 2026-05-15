@@ -182,6 +182,15 @@ const tests = [
       script: 'exit 42',
       expected: '',
       expectedExitCode: 42 },
+    // stdin without trailing newline (we append \n — verify last line reads)
+    { name: 'stdin-no-trailing-nl',
+      script: 'while IFS= read -r line; do echo "$line"; done',
+      stdin: 'a\nb\nc',
+      expected: 'a\nb\nc' },
+    // grep uses glob not regex: . is literal (not "any char"), so h.llo won't match hello/hxllo
+    { name: 'grep-dot-glob',
+      script: "printf 'hello\\nhxllo\\n' > /tmp/gd.txt\ngrep 'h.llo' /tmp/gd.txt",
+      expected: '' },
 ];
 
 const tbody = document.getElementById('results');
