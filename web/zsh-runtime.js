@@ -50,10 +50,43 @@ export const BUILTINS_PREAMBLE = `\
 touch() { local f; for f; do : >> "$f"; done }
 cat()   { local f; for f; do print -r -- "$(<$f)"; done }
 wc() {
+  local do_l=0 do_w=0 do_c=0 default=1
+  local -a args
+  for a; do
+    if [[ $a == -* ]]; then
+      default=0
+      [[ $a == *l* ]] && do_l=1
+      [[ $a == *w* ]] && do_w=1
+      [[ $a == *c* ]] && do_c=1
+    else
+      args+=($a)
+    fi
+  done
+  (( default )) && do_l=1 do_w=1 do_c=1
   local f
-  for f; do
-    local -a lines=("\${(@f)$(<$f)}")
-    printf '%7d %s\\n' \${#lines} "$f"
+  for f in $args; do
+    local content=$(<$f)
+    local out=''
+    if (( do_l )); then
+      local -a _wl=("\${(@f)content}")
+      out+=" \${#_wl}"
+    fi
+    if (( do_w )); then
+      local nw=0 _iw=0 j ch
+      for (( j=1; j<=\${#content}; j++ )); do
+        ch=\${content[$j]}
+        if [[ $ch == [[:space:]] ]]; then _iw=0
+        elif (( !_iw )); then _iw=1; (( nw++ ))
+        fi
+      done
+      out+=" $nw"
+    fi
+    if (( do_c )); then
+      local -A _wst
+      zstat -H _wst "$f"
+      out+=" \${_wst[size]}"
+    fi
+    print -- "\${out# } $f"
   done
 }
 head() {
