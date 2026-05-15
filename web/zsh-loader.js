@@ -2,7 +2,7 @@
 // type="module" is kept for top-level await support and for the import below.
 import { ansiToHtml, runZshScript as coreRun } from './zsh-runtime.js';
 
-async function runZshScript(src, stdout, stderr) {
+async function runZshScript(src, stdout, stderr, stdin = null) {
     const outEl = stdout ? document.querySelector(stdout) : null;
     const errEl = stderr ? document.querySelector(stderr) : null;
 
@@ -12,7 +12,7 @@ async function runZshScript(src, stdout, stderr) {
         outEl.classList.add('loading');
     }
 
-    const { stdout: out, stderr: err } = await coreRun(src);
+    const { stdout: out, stderr: err } = await coreRun(src, { stdin });
 
     if (outEl) {
         outEl.innerHTML = out ? ansiToHtml(out) + '\n' : '';
@@ -33,6 +33,7 @@ for (const s of document.querySelectorAll('script[type="text/zsh"]')) {
     const stderr = s.dataset.stderr;
     const pre    = document.getElementById('src-' + id);
 
+    let stdinArea = null;
     let editor;
     if (pre) {
         pre.innerHTML = '';
@@ -44,6 +45,23 @@ for (const s of document.querySelectorAll('script[type="text/zsh"]')) {
             lineWrapping:   false,
             viewportMargin: Infinity,
         });
+
+        if ('stdin' in s.dataset) {
+            const outEl = stdout ? document.querySelector(stdout) : null;
+            const outPane = outEl?.closest('.pane');
+            const body = outPane?.closest('.example-body');
+            if (body && outPane) {
+                body.classList.add('has-stdin');
+                const stdinPane = document.createElement('div');
+                stdinPane.className = 'pane';
+                stdinPane.innerHTML = '<div class="pane-label">Stdin</div>';
+                stdinArea = document.createElement('textarea');
+                stdinArea.className = 'stdin-area';
+                stdinArea.value = s.dataset.stdin.replace(/\\n/g, '\n');
+                stdinPane.appendChild(stdinArea);
+                body.insertBefore(stdinPane, outPane);
+            }
+        }
 
         const header = pre.closest('.example')?.querySelector('.example-header');
         if (header) {
@@ -68,7 +86,7 @@ for (const s of document.querySelectorAll('script[type="text/zsh"]')) {
                 if (runBtn.dataset.busy) return;
                 runBtn.dataset.busy = '1';
                 runBtn.textContent = 'Running…';
-                await runZshScript(editor.getValue(), stdout, stderr);
+                await runZshScript(editor.getValue(), stdout, stderr, stdinArea?.value ?? null);
                 delete runBtn.dataset.busy;
                 runBtn.textContent = '▶ Run';
             });
@@ -79,6 +97,6 @@ for (const s of document.querySelectorAll('script[type="text/zsh"]')) {
     }
 
     if (s.dataset.autoRun === 'true') {
-        await runZshScript(editor ? editor.getValue() : s.textContent, stdout, stderr);
+        await runZshScript(editor ? editor.getValue() : s.textContent, stdout, stderr, stdinArea?.value ?? null);
     }
 }
