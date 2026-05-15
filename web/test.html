@@ -151,6 +151,11 @@ const tests = [
     { name: 'tr',
       script: 'echo hello > /tmp/tr.txt\ntr \'a-z\' \'A-Z\' < /tmp/tr.txt',
       expected: 'HELLO' },
+    // stdin
+    { name: 'stdin',
+      script: 'while IFS= read -r line; do echo "> $line"; done',
+      stdin: 'hello\nworld',
+      expected: '> hello\n> world' },
 ];
 
 const tbody = document.getElementById('results');
@@ -195,7 +200,7 @@ for (const t of tests) {
     const tr = addRow(t.name);
     let result;
     try {
-        result = await runZshScript(t.script);
+        result = await runZshScript(t.script, { stdin: t.stdin ?? null });
     } catch(e) {
         result = { stdout: '', stderr: String(e) };
     }

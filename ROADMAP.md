@@ -38,11 +38,17 @@ Implemented as pure zsh functions in `BUILTINS_PREAMBLE`. No Web Workers needed.
 
 ---
 
-### stdin support
+### stdin support ✓ done
 
-Allow scripts to receive standard input. The loader writes to a pre-populated
-file before `callMain`, and the script reads from it (or from a virtual pipe).
-Loader change only — no wasm binary change.
+Scripts receive standard input via the Emscripten `Module.stdin` callback,
+fed byte-by-byte from a string passed through postMessage. The API is:
+
+```js
+runZshScript(src, { stdin: 'hello\nworld' })
+```
+
+The demo page shows an editable Stdin pane (3-column layout) when a script
+tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ---
 

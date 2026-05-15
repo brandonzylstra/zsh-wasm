@@ -209,6 +209,8 @@ JS modules
   `ansiToHtml`, `BUILTINS_PREAMBLE`, `ZSH_FS`, and `IDBFS_MOUNT`.
 - **`zsh-loader.js`** — DOM layer. Imports from `zsh-runtime.js`, adds CodeMirror
   editors, Run/Copy buttons, and handles `<script type="text/zsh">` auto-run tags.
+  When a script tag has a `data-stdin` attribute the loader inserts an editable
+  Stdin textarea pane between Script and Output.
 
 Using in HTML
 -------------
@@ -225,9 +227,23 @@ echo "Hello from zsh $ZSH_VERSION"
 fruits=(apple banana cherry)
 for f in $fruits; echo "  $f"
 </script>
+
+<!-- script with editable stdin — loader creates a Stdin pane automatically -->
+<pre id="out-stdin"></pre>
+<script type="text/zsh" data-stdout="#out-stdin" data-stdin="hello\nworld">
+while IFS= read -r line; do echo "> $line"; done
+</script>
 ```
 
-Or call `runZshScript(src, stdoutSelector, stderrSelector)` directly from JavaScript.
+Or call `runZshScript(src, { stdin })` directly from JavaScript:
+
+```js
+import { runZshScript } from './zsh-runtime.js';
+
+const { stdout, stderr } = await runZshScript('cat', { stdin: 'hello world' });
+```
+
+The `stdin` option is a plain string. Pass `null` (or omit it) for no input.
 
 ### Filesystem backend
 
