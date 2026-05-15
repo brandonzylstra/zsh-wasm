@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# One-time initial setup for building zsh-wasm.
+# Run from the project root after downloading zsh-5.9 source (see README step 1).
+# Idempotent — safe to run again if a previous attempt was incomplete.
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+STUB="$ROOT/ncurses-stub"
+SRC="$ROOT/zsh-5.9"
+BUILD="$ROOT/build-zsh"
+
+if [[ ! -d "$SRC" ]]; then
+    echo "Error: $SRC not found. Download it first:"
+    echo "  curl -L -O https://www.zsh.org/pub/zsh-5.9.tar.xz && tar xf zsh-5.9.tar.xz"
+    exit 1
+fi
+
+echo "==> building ncurses stub"
+if [[ -f "$STUB/lib/libncurses.a" ]]; then
+    echo "    already built, skipping"
+else
+    cd "$STUB"
+    emcc -c ncurses_stub.c -o ncurses_stub.o
+    emar rcs lib/libncurses.a ncurses_stub.o
+    cd "$ROOT"
+fi
+
+echo "==> patching zsh source"
+# zutil.mdd: remove spurious moddeps on zsh/complete
+if grep -q 'moddeps="zsh/complete"' "$SRC/Src/Modules/zutil.mdd" 2>/dev/null; then
+    sed -i '' '/^moddeps="zsh\/complete"$/d' "$SRC/Src/Modules/zutil.mdd"
+    echo "    zutil.mdd: removed moddeps line"
+else
+    echo "    zutil.mdd: already patched"
+fi
+# zutil.c: inline the one call that depended on zsh/complete
+if grep -q 'set_list_array(args\[1\], zstyle_list)' "$SRC/Src/Modules/zutil.c"; then
+    sed -i '' \
+        's/set_list_array(args\[1\], zstyle_list);/setaparam(args[1], zlinklist2array(zstyle_list, 1));/' \
+        "$SRC/Src/Modules/zutil.c"
+    echo "    zutil.c: inlined set_list_array call"
+else
+    echo "    zutil.c: already patched"
+fi
+
+echo "==> configuring"
+if [[ -f "$BUILD/Makefile" ]]; then
+    echo "    already configured (delete build-zsh/ to reconfigure from scratch)"
+else
+    mkdir -p "$BUILD"
+    cd "$BUILD"
+    emconfigure "$SRC/configure" \
+        --build="$("$SRC/config.guess")" \
+        --host=wasm32-unknown-emscripten \
+        --disable-dynamic \
+        --without-tcsetpgrp \
+        --disable-dynamic-nss \
+        CPPFLAGS="-I$STUB/include" \
+        LDFLAGS="-L$STUB/lib" \
+        LIBS="-lncurses" \
+        CFLAGS="-Os"
+    cd "$ROOT"
+fi
+
+echo "==> patching config.h"
+"$ROOT/bin/patch-config"
+
+echo "==> patching generated build files"
+cd "$BUILD"
+if grep -q '^ZSH_TERM_H = term.h' Config/defs.mk; then
+    echo "    defs.mk: already patched"
+else
+    sed -i '' 's/^ZSH_TERM_H = $/ZSH_TERM_H = term.h/' Config/defs.mk
+    echo "    defs.mk: patched"
+fi
+if [[ -f Src/zshterm.h ]] && grep -q 'term.h' Src/zshterm.h; then
+    echo "    zshterm.h: already exists"
+else
+    printf '#include <term.h>\n' > Src/zshterm.h
+    echo "    zshterm.h: created"
+fi
+
+echo "==> configuring modules"
+# Disable ZLE/completion — require a real terminal and add ~350KB to the binary
+sed -i '' -E \
+    -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)link=static/\1link=no/' \
+    -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)load=yes/\1load=no/' \
+    config.modules
+# Enable zsh/files (file ops without fork) and zsh/stat (file metadata for ls -l)
+sed -i '' -E \
+    -e 's/^(name=zsh\/(files|stat) .*)link=no/\1link=static/' \
+    -e 's/^(name=zsh\/(files|stat) .*)load=no/\1load=yes/' \
+    config.modules
+echo "    config.modules: done"
+
+echo ""
+echo "Setup complete. Run  bin/build  to compile and deploy."

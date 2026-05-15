@@ -152,14 +152,24 @@ python3 -m http.server
 # open http://localhost:8000/
 ```
 
-Quick Rebuild
--------------
+Scripts
+-------
 
-After the initial setup, use the provided scripts instead of repeating steps 5c–7:
+Three scripts in `bin/` automate the build process. All are idempotent.
 
 ```
-bin/build           # make prep + patch config.h + emmake make + deploy to web/
-bin/patch-config    # re-apply config.h patches only (idempotent)
+bin/setup           # one-time initial setup (steps 2–5): ncurses stub, emconfigure,
+                    # source patches, build-file patches, config.modules
+bin/build           # rebuild and deploy (steps 5c–7): make prep, patch config.h,
+                    # emmake make, copy to web/
+bin/patch-config    # patch config.h only — run after any make prep wipes it
+```
+
+After downloading `zsh-5.9/` (step 1), the full workflow is just:
+
+```
+bin/setup
+bin/build
 ```
 
 Using in HTML
