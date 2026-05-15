@@ -3,3 +3,7 @@ zsh-5.9/
 zsh-5.9.tar.xz
 ncurses-stub/lib/
 ncurses-stub/*.o
+npm/zsh.js
+npm/zsh.wasm
+npm/zsh-runtime.js
+npm/zsh-worker.js

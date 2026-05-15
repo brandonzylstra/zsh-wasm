@@ -75,5 +75,11 @@ if (( DEBUG )) && [[ -f Src/zsh.wasm.map ]]; then
     cp Src/zsh.wasm.map "$OUT_DIR/zsh.wasm.map"
 fi
 
+# When deploying outside web/, also copy the runtime JS files that live there.
+if [[ "$OUT_DIR" != "$ROOT/web" ]]; then
+    cp "$ROOT/web/zsh-runtime.js" "$OUT_DIR/zsh-runtime.js"
+    cp "$ROOT/web/zsh-worker.js"  "$OUT_DIR/zsh-worker.js"
+fi
+
 SIZE=$(du -h "$OUT_DIR/zsh.wasm" | cut -f1)
 echo "Done — $OUT_DIR/zsh.wasm is $SIZE"
