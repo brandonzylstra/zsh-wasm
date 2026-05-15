@@ -35,12 +35,20 @@ self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
     }
 
     module.FS.writeFile('/script', src);
-    module.callMain(['/script']);
+
+    let exitCode = 0;
+    try {
+        const ret = module.callMain(['/script']);
+        if (typeof ret === 'number') exitCode = ret;
+    } catch (e) {
+        if (e && typeof e.status === 'number') exitCode = e.status;
+        else throw e;
+    }
 
     if (fs === 'idbfs') {
         await new Promise((res, rej) =>
             module.FS.syncfs(false, err => err ? rej(err) : res()));
     }
 
-    self.postMessage({ stdout: outLines.join('\n'), stderr: errLines.join('\n') });
+    self.postMessage({ stdout: outLines.join('\n'), stderr: errLines.join('\n'), exitCode });
 };

@@ -177,6 +177,11 @@ const tests = [
       script: 'while IFS= read -r line; do echo "> $line"; done',
       stdin: 'hello\nworld',
       expected: '> hello\n> world' },
+    // exit code
+    { name: 'exit-code',
+      script: 'exit 42',
+      expected: '',
+      expectedExitCode: 42 },
 ];
 
 const tbody = document.getElementById('results');
@@ -233,6 +238,12 @@ for (const t of tests) {
     } else {
         expectedStr = `contains: ${t.expected_contains}`;
         pass = actual.includes(t.expected_contains);
+    }
+    if (pass && t.expectedExitCode !== undefined) {
+        if (result.exitCode !== t.expectedExitCode) {
+            pass = false;
+            expectedStr += ` (exit ${t.expectedExitCode})`;
+        }
     }
     pass ? passed++ : failed++;
     updateRow(tr, pass, actual, expectedStr);
