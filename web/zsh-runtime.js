@@ -252,36 +252,23 @@ tr() {
 }
 `;
 
-// Runs a zsh script and returns { stdout, stderr } as plain strings.
-export async function runZshScript(src) {
-    const outLines = [];
-    const errLines = [];
-    const opts = {
-        noInitialRun: true,
-        print:    txt => outLines.push(txt),
-        printErr: txt => { if (!isRuntimeNoise(txt)) errLines.push(txt); },
-    };
-
-    const module = await createZshModule(opts);
-
-    if (ZSH_FS === 'idbfs') {
-        try { module.FS.mkdir('/home'); } catch(e) {}
-        try { module.FS.mkdir(IDBFS_MOUNT); } catch(e) {}
-        module.FS.mount(module.FS.filesystems['IDBFS'], {}, IDBFS_MOUNT);
-        await new Promise((res, rej) =>
-            module.FS.syncfs(true, err => err ? rej(err) : res()));
-    }
-
-    module.FS.writeFile('/script', BUILTINS_PREAMBLE + src + '\n');
-    module.callMain(['/script']);
-
-    if (ZSH_FS === 'idbfs') {
-        await new Promise((res, rej) =>
-            module.FS.syncfs(false, err => err ? rej(err) : res()));
-    }
-
-    return {
-        stdout: outLines.join('\n'),
-        stderr: errLines.join('\n'),
-    };
+// Runs a zsh script off the main thread via a Web Worker.
+// Returns { stdout, stderr } as plain strings.
+export function runZshScript(src) {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(new URL('./zsh-worker.js', import.meta.url));
+        worker.onmessage = ({ data }) => {
+            worker.terminate();
+            resolve(data);
+        };
+        worker.onerror = (e) => {
+            worker.terminate();
+            reject(e);
+        };
+        worker.postMessage({
+            src: BUILTINS_PREAMBLE + src + '\n',
+            fs: ZSH_FS,
+            idbfsMount: IDBFS_MOUNT,
+        });
+    });
 }
