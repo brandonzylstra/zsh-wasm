@@ -79,65 +79,43 @@ The package ships four files: `zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, `zsh.
 
 ## Known issues / investigations
 
-### `=~` (POSIX regex) crashes the wasm process
+### `=~` (POSIX regex) — fix in `bin/setup`, needs rebuild
 
-**Symptoms**
+**Root cause (resolved)**
 
-`[[ str =~ pattern ]]` kills the entire wasm module — the process emits no
-further stdout, not even the `no` branch of `[[ … ]] && … || echo no`. This
-is not a "returns false" failure; it is a hard abort before any output lands.
+`zsh/regex` was compiled out. Its `.mdd` only emits `link=dynamic` or `link=no`;
+since we build with `--disable-dynamic`, configure chose `link=no`. At runtime,
+`[[ str =~ pat ]]` calls `ensurefeature("zsh/regex")` in `Src/cond.c`, which
+fails because the module is absent, then calls `zerrnam()` and sets `errflag`.
+`errflag` causes zsh to abort the script immediately — before any `|| echo no`
+branch can run — producing empty stdout. musl's `regcomp`/`regexec` were never
+reached at all; `HAVE_REGCOMP` and `HAVE_REGEXEC` are both `1` in `config.h`,
+so the symbols exist in the binary and should work once the module is reachable.
 
-**Consequence**
+**Fix (landed in `bin/setup`)**
 
-- Our `grep` shim originally used `[[ $line =~ $pat ]]` and returned empty
-  output for every call (the first regex test on the first line killed the run).
-- `grep` is now rewritten to use `case $str in (*$pat*)` (glob matching), which
-  works but diverges from real grep: `.` is literal, `+`/`|`/`()` don't work,
-  anchors (`^`/`$`) are not supported, etc.
-- Empirical probe tests (below) are kept out of the main test suite because
-  they will always fail until this is resolved.
+Two `sed` lines patch `config.modules` to force `zsh/regex link=static load=yes`,
+exactly like `zsh/files` and `zsh/stat`. No source patches, no third-party
+libraries, no EM_JS/PCRE. Size impact: ~10–15 KB of compiled wasm.
 
-**Tests removed from suite** (in `web/test.html` git history, commit `d186dbe`):
+**Needs a rebuild.** After rebuilding, complete the work:
 
-```js
-{ name: 'regex-basic',   script: '[[ hello =~ ell ]] && echo yes || echo no', expected: 'yes' },
-{ name: 'regex-dot',     script: '[[ hello =~ h.llo ]] && echo yes || echo no', expected: 'yes' },
-{ name: 'regex-no-match',script: '[[ hello =~ xyz ]] && echo yes || echo no', expected: 'no' },
-```
+1. **Restore grep's `=~` path** — revert the `case` glob workaround in
+   `BUILTINS_PREAMBLE`; restore `[[ $line =~ $pat ]]` and `[[ ${line:l} =~ ${pat:l} ]]`.
 
-**Theories**
+2. **Re-add regex probe tests** to `web/test.html` (removed at commit `d186dbe`
+   because they reliably aborted the wasm process):
+   ```js
+   { name: 'regex-basic',    script: '[[ hello =~ ell ]] && echo yes || echo no', expected: 'yes' },
+   { name: 'regex-dot',      script: '[[ hello =~ h.llo ]] && echo yes || echo no', expected: 'yes' },
+   { name: 'regex-no-match', script: '[[ hello =~ xyz ]] && echo yes || echo no', expected: 'no' },
+   ```
 
-1. **musl `regcomp`/`regexec` calls `abort()`** — emscripten bundles musl libc,
-   whose POSIX regex implementation may call `abort()` or `__assert_fail()` on
-   an unimplemented code path. In wasm that unwinds the entire module.
+3. **Fix `grep-dot-glob` test** — with real regex, `h.llo` matches `hello` and
+   `hxllo`, so change `expected` from `''` to `'hello\nhxllo'`.
 
-2. **Signal delivery** — POSIX regex can raise `SIGABRT`. Signals in wasm are
-   emulated; an unhandled one terminates the module.
-
-3. **zsh compiled without regex** — unlikely (zsh 5.9 uses `=~` by default and
-   the configure step would warn), but possible if the emscripten toolchain
-   silently stubbed out the regex symbols.
-
-**How to investigate**
-
-- Add a tiny C program that calls `regcomp("ell", 0, &r); regexec(...)` and
-  compile it with emscripten to see if it crashes independently of zsh.
-- Search the emscripten / musl issue trackers for `regcomp` + `abort`.
-- Check `build-zsh/config.h` for `HAVE_PCRE_H`, `HAVE_REGCOMP`, etc.
-- Run the removed probe tests against a future build after any fix.
-
-**Possible fixes**
-
-- **Patch musl regex in the build** — supply a working `regcomp`/`regexec`
-  (e.g., from a standalone POSIX regex library compiled to wasm) and link it
-  in place of musl's broken version.
-- **Enable PCRE** — build libpcre2 for wasm and configure zsh with
-  `--enable-pcre`. zsh's `=~` will use PCRE instead of POSIX ERE.
-- **Stub out regex at the zsh layer** — patch zsh source to replace `=~`
-  with a JS-backed implementation via emscripten's `EM_JS` / `EM_ASM`.
-- **Ship a JS-side grep** — implement `grep` entirely in JavaScript (using
-  the browser's native `RegExp`) and inject it as a pre-run script rather
-  than a zsh function. This sidesteps the wasm regex issue entirely.
+4. **Update README** — remove/soften the regex Known Limitations entries once
+   `=~` and `grep` are confirmed working.
 
 ---
 

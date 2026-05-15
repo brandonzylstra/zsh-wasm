@@ -341,17 +341,16 @@ Known Limitations
   the build (they require a real terminal and add ~350KB to the binary).
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`date` has no timezone** — outputs UTC regardless of system locale.
-- **POSIX regex (`=~`) crashes the wasm process** — `[[ str =~ pattern ]]` kills
-  the entire wasm module instead of returning a result. The symptom is an empty
-  stdout even when the pattern doesn't match, because the process aborts before
-  any output is written. Root cause appears to be `regcomp`/`regexec` in
-  emscripten's musl libc calling `abort()`. See ROADMAP.md for investigation
-  notes and possible fixes.
-- **`grep` uses glob matching, not regex** — a consequence of the `=~` crash.
-  Simple string patterns (`grep foo file`) work correctly. Regex metacharacters
-  behave differently from real grep: `.` is a literal dot (not "any character"),
-  `+`/`?`/`|`/`()`/`^`/`$` have no special meaning. Character classes (`[abc]`)
-  use zsh glob syntax and may behave slightly differently from ERE.
+- **POSIX regex (`=~`) requires a rebuild to work** — `[[ str =~ pattern ]]`
+  currently kills the wasm process because the `zsh/regex` module was compiled
+  out (`link=no`). The fix is in `bin/setup` (adds `zsh/regex link=static`) but
+  won't take effect until the wasm binary is rebuilt. See ROADMAP.md for the
+  full diagnosis and post-rebuild checklist.
+- **`grep` uses glob matching, not regex** — a temporary consequence of the
+  `=~` issue above. Simple string patterns (`grep foo file`) work correctly.
+  Regex metacharacters behave differently from real grep: `.` is a literal dot,
+  `+`/`?`/`|`/`()`/`^`/`$` have no special meaning. Will be restored to real
+  regex matching once the wasm binary is rebuilt.
 - **stdin is always newline-terminated** — if the string passed as `stdin` does
   not end with `\n`, one is appended before feeding it to the wasm process. This
   is the correct POSIX convention for text and is transparent to line-oriented
