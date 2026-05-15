@@ -43,7 +43,7 @@ export function isRuntimeNoise(txt) {
            txt.startsWith('program exited (with status:');
 }
 
-export const ZSH_FS = (window.ZshWasmConfig?.fs ?? 'memfs').toLowerCase();
+export const ZSH_FS = (globalThis.ZshWasmConfig?.fs ?? 'memfs').toLowerCase();
 export const IDBFS_MOUNT = '/home/user';
 
 export const BUILTINS_PREAMBLE = `\
@@ -254,7 +254,7 @@ tr() {
 
 // Runs a zsh script off the main thread via a Web Worker.
 // Returns { stdout, stderr } as plain strings.
-export function runZshScript(src, { stdin = null } = {}) {
+export function runZshScript(src, { stdin = null, fs = null } = {}) {
     return new Promise((resolve, reject) => {
         const worker = new Worker(new URL('./zsh-worker.js', import.meta.url));
         worker.onmessage = ({ data }) => {
@@ -267,7 +267,7 @@ export function runZshScript(src, { stdin = null } = {}) {
         };
         worker.postMessage({
             src: BUILTINS_PREAMBLE + src + '\n',
-            fs: ZSH_FS,
+            fs: fs ?? ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
             stdin,
         });
