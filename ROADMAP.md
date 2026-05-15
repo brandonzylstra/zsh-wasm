@@ -22,19 +22,17 @@ This is a loader (`zsh-loader.js`) change only — zero impact on wasm binary si
 
 ---
 
-### Additional shims: sort, uniq, cut, tr, date
+### Additional shims: sort, uniq, cut, tr, date ✓ done
 
-Implement these as pure zsh functions in the `BUILTINS_PREAMBLE`, the same way
-`ls`, `cat`, `grep`, etc. are already shimmed. **Web Workers are not a prerequisite**
-— these shims work around fork entirely by running as zsh builtins.
+Implemented as pure zsh functions in `BUILTINS_PREAMBLE`. No Web Workers needed.
 
 | Shim   | Approach |
 |--------|----------|
-| `date` | `strftime` from `zsh/datetime` (already compiled in) |
-| `sort` | zsh `${(o)array}` glob qualifier for alphabetical sort |
-| `uniq` | zsh array deduplication with loop |
-| `cut`  | zsh parameter expansion (`${var[(w)N]}` for field splitting) |
-| `tr`   | character-by-character substitution with zsh expansion |
+| `date` | `strftime` from `zsh/datetime`; `+FORMAT` arg supported |
+| `sort` | `${(o)}` / `${(O)}` / `${(on)}` array flags for alpha/reverse/numeric sort |
+| `uniq` | consecutive-duplicate removal with loop |
+| `cut`  | `\x01` as internal separator; field ranges (`1-3`, `2,4`) supported |
+| `tr`   | `${(U)}`/`${(L)}` for `a-z`↔`A-Z`; char-by-char loop for arbitrary mappings |
 
 ---
 

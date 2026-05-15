@@ -262,6 +262,11 @@ most common ones:
 | `head`   | `-n N`, `-N`         | first N lines (default 10) |
 | `tail`   | `-n N`, `-N`         | last N lines (default 10) |
 | `grep`   | —                    | POSIX regex via zsh `=~`; no flags |
+| `sort`   | `-r` `-n` `-u`       | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)` |
+| `uniq`   | —                    | removes consecutive duplicate lines |
+| `cut`    | `-d DELIM` `-f N`    | field ranges (`1-3`, `2,4`) supported |
+| `tr`     | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |
+| `date`   | `+FORMAT`            | uses `strftime` from `zsh/datetime`; no timezone (outputs UTC) |
 
 `mkdir` and `rm` work natively — Emscripten supports those syscalls directly without forking.
 
@@ -276,6 +281,8 @@ Known Limitations
   the build (they require a real terminal and add ~350KB to the binary).
 - **`wc` counts lines only** — no word or byte count.
 - **`grep` has no flags** — no `-i`, `-v`, `-n`, etc.
+- **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
+- **`date` has no timezone** — outputs UTC regardless of system locale.
 
 License
 -------

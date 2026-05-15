@@ -133,6 +133,25 @@ const tests = [
     { name: 'datetime',
       script: 'zmodload zsh/datetime\necho $((EPOCHSECONDS > 0))',
       expected: '1' },
+    // new shims
+    { name: 'date',
+      script: 'date +%Y',
+      expected: '2026' },
+    { name: 'sort',
+      script: "printf 'banana\\napple\\ncherry\\n' > /tmp/so.txt\nsort /tmp/so.txt",
+      expected: 'apple\nbanana\ncherry' },
+    { name: 'sort-r',
+      script: "printf 'banana\\napple\\ncherry\\n' > /tmp/sor.txt\nsort -r /tmp/sor.txt",
+      expected: 'cherry\nbanana\napple' },
+    { name: 'uniq',
+      script: "printf 'a\\na\\nb\\nb\\nb\\nc\\n' > /tmp/uq.txt\nuniq /tmp/uq.txt",
+      expected: 'a\nb\nc' },
+    { name: 'cut',
+      script: "printf 'root:x:0\\nuser:x:1\\n' > /tmp/ct.txt\ncut -d: -f1 /tmp/ct.txt",
+      expected: 'root\nuser' },
+    { name: 'tr',
+      script: 'echo hello > /tmp/tr.txt\ntr \'a-z\' \'A-Z\' < /tmp/tr.txt',
+      expected: 'HELLO' },
 ];
 
 const tbody = document.getElementById('results');
