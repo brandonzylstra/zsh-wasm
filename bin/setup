@@ -100,6 +100,30 @@ sed -i '' -E \
     -e 's/^(name=zsh\/regex .*)link=no/\1link=static/' \
     -e 's/^(name=zsh\/regex .*)load=no/\1load=yes/' \
     config.modules
+# Register zsh/sed (disabled by default; enabled at build time with --with-sed).
+# The module descriptor lives in sed-src/; bin/build --with-sed copies it to the
+# zsh source tree before compiling.  We just need the entry in config.modules so
+# that bin/build can flip link=static when requested.
+if grep -q '^name=zsh/sed ' config.modules; then
+    echo "    config.modules: zsh/sed already present"
+else
+    sed -i '' '/^name=zsh\/net\/socket /a\
+name=zsh/sed modfile=Src/Modules/sed.mdd link=no auto=yes load=no' \
+        config.modules
+    echo "    config.modules: added zsh/sed (disabled by default)"
+fi
+# Patch config.modules.sh so the zsh/sed entry survives a manual config.status run.
+if grep -q 'zsh/sed' config.modules.sh; then
+    echo "    config.modules.sh: zsh/sed already present"
+else
+    sed -i '' '/\*" zsh\/stat "\*) grep/i\
+case "$userlist" in\
+  *" zsh\/sed "*) grep "^name=zsh\/sed " ${CONFIG_MODULES}.old;;\
+  *) echo "name=zsh\/sed modfile=Src\/Modules\/sed.mdd link=no auto=yes load=no";;\
+esac' \
+        config.modules.sh
+    echo "    config.modules.sh: added zsh/sed entry"
+fi
 echo "    config.modules: done"
 
 echo ""

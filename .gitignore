@@ -1,4 +1,5 @@
 build-zsh/
+build-sed/
 zsh-5.9/
 zsh-5.9.tar.xz
 ncurses-stub/lib/
