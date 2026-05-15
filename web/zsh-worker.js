@@ -19,7 +19,8 @@ self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
     };
 
     if (stdin != null) {
-        const bytes = new TextEncoder().encode(stdin);
+        const text = stdin.endsWith('\n') ? stdin : stdin + '\n';
+        const bytes = new TextEncoder().encode(text);
         let pos = 0;
         opts.stdin = () => pos < bytes.length ? bytes[pos++] : null;
     }
