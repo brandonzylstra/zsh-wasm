@@ -7,3 +7,6 @@ npm/zsh.js
 npm/zsh.wasm
 npm/zsh-runtime.js
 npm/zsh-worker.js
+node_modules/
+package-lock.json
+test-results/
