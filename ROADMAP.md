@@ -54,7 +54,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 64 test cases and compares actual vs. expected output:
+`web/test.html` runs 70 test cases and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
@@ -63,7 +63,8 @@ Covers: shell builtins (echo, printf, if, for, while, case, function), all shims
 patterns, recursive globs, module loading (`zsh/datetime`), stdin, exit codes,
 POSIX regex (`=~`, grep anchors, alternation, character classes, `+`, `?`, `{n}`
 quantifiers), grep across multiple files, sort combined flags (`-rn`), cut
-open-ended field ranges (`-f3-`, `-f-2`), and wc across multiple files.
+open-ended field ranges (`-f3-`, `-f-2`), wc across multiple files, and sed
+(substitution, global replace, deletion, `-n`/`-e`, address ranges).
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
@@ -127,24 +128,23 @@ site, but not needed for the primary use case of running scripted examples.
 
 ---
 
-### sed
+### sed ✓ done
 
-Two viable approaches:
+OpenBSD sed is compiled into the wasm binary as a zsh builtin via `bin/build --with-sed`.
+The default build stays slim (~892 KB); `--with-sed` adds ~24 KB.
 
-**Zsh shim (lower effort)** — now feasible since `=~` and `$MATCH`/`$match`
-are working. Can cover `s/pat/repl/[g]`, `/pat/d`, `/pat/p`, `-n`, basic
-line-range addressing, and `\1` backreferences via `$match[N]`. Covers ~80%
-of real-world sed usage. Incompatible with hold space, branch/label, and
-multi-expression scripts.
+Implementation approach:
+- OpenBSD sed source (~2 KLOC C) patched for embedding: `exit()` replaced by
+  `longjmp`-based `sed_do_exit()`, `err()`/`errx()` replaced by wrappers,
+  `pledge()` stubbed, all global state reset between calls
+- Zsh module glue (`zsh-5.9/Src/Modules/sed.c`) registers `sed` as a builtin
+- `sed-src/` holds the patched sed source and embedding glue
+- `bin/build --with-sed` compiles the sed objects separately and injects them
+  at link time via `LDFLAGS`
 
-**Compiled wasm (higher effort, full compatibility)** — sed is pure C with no
-hard dependencies. Compile GNU sed or OpenBSD sed with emscripten as a
-standalone `sed.wasm`. The JS worker intercepts calls to the `sed` command and
-runs the separate module, sharing the emscripten filesystem. Gives true
-compatibility at the cost of additional build machinery and ~150–300 KB.
-
-Recommended path: implement the zsh shim first (high value, low risk), then
-revisit compiled wasm if compatibility gaps are hit in practice.
+User-controlled: the `--with-sed` flag is passed at build time, keeping the
+default wasm lean while allowing users to opt in. Future tools (awk, bc) can
+use the same optional-builtin pattern.
 
 ---
 

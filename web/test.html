@@ -276,6 +276,30 @@ const tests = [
     { name: 'wc-multifile',
       script: "printf 'a\\nb\\n' > /tmp/wm1.txt\nprintf 'x\\ny\\nz\\n' > /tmp/wm2.txt\nwc -l /tmp/wm1.txt /tmp/wm2.txt",
       expected: '2 /tmp/wm1.txt\n3 /tmp/wm2.txt' },
+    // sed: basic substitution (uses file arg; C-level stdin bypasses zsh pipe sim)
+    { name: 'sed-sub',
+      script: "printf 'hello world\\n' > /tmp/ss.txt\nsed 's/world/zsh/' /tmp/ss.txt",
+      expected: 'hello zsh' },
+    // sed: global substitution
+    { name: 'sed-sub-global',
+      script: "printf 'aabbaa\\n' > /tmp/ssg.txt\nsed 's/a/x/g' /tmp/ssg.txt",
+      expected: 'xxbbxx' },
+    // sed: delete matching lines
+    { name: 'sed-delete',
+      script: "printf 'keep\\ndelete me\\nkeep too\\n' > /tmp/sd.txt\nsed '/delete/d' /tmp/sd.txt",
+      expected: 'keep\nkeep too' },
+    // sed: print only matching lines (-n with /p)
+    { name: 'sed-print-match',
+      script: "printf 'apple\\nbanana\\napricot\\n' > /tmp/spm.txt\nsed -n '/^a/p' /tmp/spm.txt",
+      expected: 'apple\napricot' },
+    // sed: multiple -e expressions
+    { name: 'sed-multi-expr',
+      script: "printf 'foo bar\\n' > /tmp/sme.txt\nsed -e 's/foo/baz/' -e 's/bar/qux/' /tmp/sme.txt",
+      expected: 'baz qux' },
+    // sed: address range substitution
+    { name: 'sed-addr-range',
+      script: "printf 'a\\nb\\nc\\nd\\n' > /tmp/sar.txt\nsed '2,3s/.*/X/' /tmp/sar.txt",
+      expected: 'a\nX\nX\nd' },
 ];
 
 const tbody = document.getElementById('results');
