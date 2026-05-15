@@ -77,14 +77,41 @@ tail() {
   done
 }
 grep() {
-  local pat=$1; shift
+  local ignore_case=0 invert=0 line_num=0 count_only=0
+  local -a args
+  for a; do
+    if [[ $a == -* ]]; then
+      [[ $a == *i* ]] && ignore_case=1
+      [[ $a == *v* ]] && invert=1
+      [[ $a == *n* ]] && line_num=1
+      [[ $a == *c* ]] && count_only=1
+    else
+      args+=($a)
+    fi
+  done
+  local pat=\${args[1]}
+  args=("\${(@)args[2,-1]}")
   local f
-  for f; do
+  for f in $args; do
     local -a lines=("\${(@f)$(<$f)}")
-    local line
-    for line in $lines; do
-      [[ $line =~ $pat ]] && print -- "$line"
+    local line i=0 count=0
+    for line in "\${(@)lines}"; do
+      (( i++ ))
+      local _match=0
+      if (( ignore_case )); then
+        [[ \${line:l} =~ \${pat:l} ]] && _match=1
+      else
+        [[ $line =~ $pat ]] && _match=1
+      fi
+      (( invert )) && (( _match = !_match ))
+      if (( _match )); then
+        (( count++ ))
+        if (( !count_only )); then
+          (( line_num )) && print -- "$i:$line" || print -- "$line"
+        fi
+      fi
     done
+    (( count_only )) && print -- $count
   done
 }
 _ls_modestr() {
