@@ -91,6 +91,15 @@ sed -i '' -E \
     -e 's/^(name=zsh\/(files|stat) .*)link=no/\1link=static/' \
     -e 's/^(name=zsh\/(files|stat) .*)load=no/\1load=yes/' \
     config.modules
+# Enable zsh/regex so that [[ str =~ pat ]] works.
+# regex.mdd only emits link=dynamic or link=no; since we build --disable-dynamic
+# the module would otherwise be compiled out, causing =~ to abort the script via
+# errflag when ensurefeature("zsh/regex") fails at runtime.
+# HAVE_REGCOMP/HAVE_REGEXEC are already 1 in config.h (musl libc provides them).
+sed -i '' -E \
+    -e 's/^(name=zsh\/regex .*)link=no/\1link=static/' \
+    -e 's/^(name=zsh\/regex .*)load=no/\1load=yes/' \
+    config.modules
 echo "    config.modules: done"
 
 echo ""
