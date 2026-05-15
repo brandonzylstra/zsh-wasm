@@ -1,0 +1,7 @@
+name=zsh/sed
+link=dynamic
+load=no
+
+autofeatures="b:sed"
+
+objects=""
