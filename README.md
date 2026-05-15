@@ -321,7 +321,7 @@ most common ones:
 | `wc`     | `-l` `-w` `-c`       | lines, words, bytes; default shows all three |
 | `head`   | `-n N`, `-N`         | first N lines (default 10) |
 | `tail`   | `-n N`, `-N`         | last N lines (default 10) |
-| `grep`   | `-i` `-v` `-n` `-c`  | glob matching only (see Known Limitations); simple string patterns work |
+| `grep`   | `-i` `-v` `-n` `-c`  | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc) |
 | `sort`   | `-r` `-n` `-u`       | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)` |
 | `uniq`   | —                    | removes consecutive duplicate lines |
 | `cut`    | `-d DELIM` `-f N`    | field ranges (`1-3`, `2,4`) supported |
@@ -341,16 +341,6 @@ Known Limitations
   the build (they require a real terminal and add ~350KB to the binary).
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`date` has no timezone** — outputs UTC regardless of system locale.
-- **POSIX regex (`=~`) requires a rebuild to work** — `[[ str =~ pattern ]]`
-  currently kills the wasm process because the `zsh/regex` module was compiled
-  out (`link=no`). The fix is in `bin/setup` (adds `zsh/regex link=static`) but
-  won't take effect until the wasm binary is rebuilt. See ROADMAP.md for the
-  full diagnosis and post-rebuild checklist.
-- **`grep` uses glob matching, not regex** — a temporary consequence of the
-  `=~` issue above. Simple string patterns (`grep foo file`) work correctly.
-  Regex metacharacters behave differently from real grep: `.` is a literal dot,
-  `+`/`?`/`|`/`()`/`^`/`$` have no special meaning. Will be restored to real
-  regex matching once the wasm binary is rebuilt.
 - **stdin is always newline-terminated** — if the string passed as `stdin` does
   not end with `\n`, one is appended before feeding it to the wasm process. This
   is the correct POSIX convention for text and is transparent to line-oriented

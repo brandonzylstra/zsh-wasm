@@ -119,17 +119,17 @@ grep() {
     shift
   done
   local pat=$1; shift
-  local f line _cnt _num _hit _tl _tp
+  local f line _cnt _num _hit
   local -a lines
   for f; do
     lines=("\${(@f)$(<$f)}")
     _cnt=0 _num=0
     for line in "\${(@)lines}"; do
       (( _num++ ))
-      _tl=$line _tp=$pat
-      (( _gi )) && _tl=\${_tl:l} _tp=\${_tp:l}
       _hit=0
-      case \$_tl in (*\$_tp*) _hit=1 ;; esac
+      if (( _gi )); then [[ \${line:l} =~ \${pat:l} ]] && _hit=1
+      else               [[ $line =~ $pat ]]           && _hit=1
+      fi
       (( _gv )) && (( _hit = !_hit ))
       if (( _hit )); then
         (( _cnt++ ))

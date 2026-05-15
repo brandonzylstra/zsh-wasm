@@ -79,7 +79,7 @@ The package ships four files: `zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, `zsh.
 
 ## Known issues / investigations
 
-### `=~` (POSIX regex) — fix in `bin/setup`, needs rebuild
+### `=~` (POSIX regex) ✓ done
 
 **Root cause (resolved)**
 
@@ -89,33 +89,15 @@ since we build with `--disable-dynamic`, configure chose `link=no`. At runtime,
 fails because the module is absent, then calls `zerrnam()` and sets `errflag`.
 `errflag` causes zsh to abort the script immediately — before any `|| echo no`
 branch can run — producing empty stdout. musl's `regcomp`/`regexec` were never
-reached at all; `HAVE_REGCOMP` and `HAVE_REGEXEC` are both `1` in `config.h`,
-so the symbols exist in the binary and should work once the module is reachable.
+reached at all; `HAVE_REGCOMP` and `HAVE_REGEXEC` are both `1` in `config.h`.
 
-**Fix (landed in `bin/setup`)**
+**Fix**
 
-Two `sed` lines patch `config.modules` to force `zsh/regex link=static load=yes`,
-exactly like `zsh/files` and `zsh/stat`. No source patches, no third-party
-libraries, no EM_JS/PCRE. Size impact: ~10–15 KB of compiled wasm.
-
-**Needs a rebuild.** After rebuilding, complete the work:
-
-1. **Restore grep's `=~` path** — revert the `case` glob workaround in
-   `BUILTINS_PREAMBLE`; restore `[[ $line =~ $pat ]]` and `[[ ${line:l} =~ ${pat:l} ]]`.
-
-2. **Re-add regex probe tests** to `web/test.html` (removed at commit `d186dbe`
-   because they reliably aborted the wasm process):
-   ```js
-   { name: 'regex-basic',    script: '[[ hello =~ ell ]] && echo yes || echo no', expected: 'yes' },
-   { name: 'regex-dot',      script: '[[ hello =~ h.llo ]] && echo yes || echo no', expected: 'yes' },
-   { name: 'regex-no-match', script: '[[ hello =~ xyz ]] && echo yes || echo no', expected: 'no' },
-   ```
-
-3. **Fix `grep-dot-glob` test** — with real regex, `h.llo` matches `hello` and
-   `hxllo`, so change `expected` from `''` to `'hello\nhxllo'`.
-
-4. **Update README** — remove/soften the regex Known Limitations entries once
-   `=~` and `grep` are confirmed working.
+`bin/build` patches `config.modules` after every `make prep` to force
+`zsh/regex link=static load=yes`, exactly like `zsh/files` and `zsh/stat`.
+(The patch must live in `bin/build`, not just `bin/setup`, because `make prep`
+re-runs `config.status` which regenerates `config.modules` from the `.mdd` files,
+resetting any earlier patch.) Size impact: ~24 KB added to wasm binary.
 
 ---
 

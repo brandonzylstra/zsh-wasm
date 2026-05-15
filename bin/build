@@ -44,6 +44,16 @@ cd "$BUILD"
 echo "==> make prep (regenerates Makefiles from config.modules)"
 emmake make prep
 
+# make prep re-runs config.status which can regenerate config.modules from the
+# .mdd files, resetting module link= flags.  Re-apply our overrides every time.
+echo "==> patching config.modules"
+sed -i '' -E \
+    -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)link=static/\1link=no/' \
+    -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)load=yes/\1load=no/' \
+    -e 's/^(name=zsh\/(files|stat|regex) .*)link=no/\1link=static/' \
+    -e 's/^(name=zsh\/(files|stat|regex) .*)load=no/\1load=yes/' \
+    config.modules
+
 echo "==> patching config.h"
 "$ROOT/bin/patch-config"
 

@@ -188,21 +188,18 @@ const tests = [
       script: 'while IFS= read -r line; do echo "$line"; done',
       stdin: 'a\nb\nc',
       expected: 'a\nb\nc' },
-    // grep uses glob not regex: . is literal (not "any char"), so h.llo won't match hello/hxllo
-    { name: 'grep-dot-glob',
+    // grep uses =~ regex: . matches any character
+    { name: 'grep-dot-regex',
       script: "printf 'hello\\nhxllo\\n' > /tmp/gd.txt\ngrep 'h.llo' /tmp/gd.txt",
-      expected: '' },
-    // =~ (POSIX regex): zsh/regex was compiled out (link=no); fix is in bin/setup but needs rebuild.
-    // These are knownFail — they show on the page but don't count against the pass total.
-    // After rebuild: all three should pass, grep-dot-glob expected should change to 'hello\nhxllo',
-    // and grep shim should be reverted from case-glob back to [[ $line =~ $pat ]].
-    { name: 'regex-basic',    knownFail: true,
+      expected: 'hello\nhxllo' },
+    // =~ (POSIX regex via zsh/regex module, linked statically)
+    { name: 'regex-basic',
       script: '[[ hello =~ ell ]] && echo yes || echo no',
       expected: 'yes' },
-    { name: 'regex-dot',      knownFail: true,
+    { name: 'regex-dot',
       script: '[[ hello =~ h.llo ]] && echo yes || echo no',
       expected: 'yes' },
-    { name: 'regex-no-match', knownFail: true,
+    { name: 'regex-no-match',
       script: '[[ hello =~ xyz ]] && echo yes || echo no',
       expected: 'no' },
 ];
