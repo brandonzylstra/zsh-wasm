@@ -110,41 +110,35 @@ tail() {
   done
 }
 grep() {
-  local ignore_case=0 invert=0 line_num=0 count_only=0
-  local -a args
-  for a; do
-    if [[ $a == -* ]]; then
-      [[ $a == *i* ]] && ignore_case=1
-      [[ $a == *v* ]] && invert=1
-      [[ $a == *n* ]] && line_num=1
-      [[ $a == *c* ]] && count_only=1
-    else
-      args+=($a)
-    fi
+  local _gi=0 _gv=0 _gn=0 _gc=0
+  while [[ \${1-} == -* ]]; do
+    [[ $1 == *i* ]] && _gi=1
+    [[ $1 == *v* ]] && _gv=1
+    [[ $1 == *n* ]] && _gn=1
+    [[ $1 == *c* ]] && _gc=1
+    shift
   done
-  local pat=\${args[1]}
-  args=("\${(@)args[2,-1]}")
-  local f
-  for f in $args; do
-    local -a lines=("\${(@f)$(<$f)}")
-    local line i=0 count=0
+  local pat=$1; shift
+  local f line _cnt _num _hit _tl _tp
+  local -a lines
+  for f; do
+    lines=("\${(@f)$(<$f)}")
+    _cnt=0 _num=0
     for line in "\${(@)lines}"; do
-      (( i++ ))
-      local _match=0
-      if (( ignore_case )); then
-        [[ \${line:l} =~ \${pat:l} ]] && _match=1
-      else
-        [[ $line =~ $pat ]] && _match=1
-      fi
-      (( invert )) && (( _match = !_match ))
-      if (( _match )); then
-        (( count++ ))
-        if (( !count_only )); then
-          (( line_num )) && print -- "$i:$line" || print -- "$line"
+      (( _num++ ))
+      _tl=$line _tp=$pat
+      (( _gi )) && _tl=\${_tl:l} _tp=\${_tp:l}
+      _hit=0
+      case \$_tl in (*\$_tp*) _hit=1 ;; esac
+      (( _gv )) && (( _hit = !_hit ))
+      if (( _hit )); then
+        (( _cnt++ ))
+        if (( !_gc )); then
+          (( _gn )) && print -- "$_num:$line" || print -- "$line"
         fi
       fi
     done
-    (( count_only )) && print -- $count
+    (( _gc )) && print -- $_cnt
   done
 }
 _ls_modestr() {
@@ -263,10 +257,11 @@ cut() {
   for f in $args; do
     local -a lines=("\${(@f)$(<$f)}")
     local line
+    local -a out
+    local fspec
     for line in "\${(@)lines}"; do
-      local -a parts=("\${(@s[$sep])\${line//\$delim/\$sep}}")
-      local -a out
-      local fspec
+      local -a parts=("\${(@ps:\\x01:)\${line//\$delim/\$sep}}")
+      out=()
       for fspec in \${(s:,:)fields}; do
         if [[ $fspec == *-* ]]; then
           local s=\${fspec%-*} e=\${fspec#*-}
