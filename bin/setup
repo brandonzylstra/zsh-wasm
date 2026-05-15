@@ -43,6 +43,103 @@ else
     echo "    zutil.c: already patched"
 fi
 
+# exec.c: add no-fork fallback for $() command substitution in wasm
+if grep -q '__EMSCRIPTEN__' "$SRC/Src/exec.c"; then
+    echo "    exec.c: already patched for wasm command substitution"
+else
+    python3 - "$SRC/Src/exec.c" << 'PYEOF'
+import sys
+with open(sys.argv[1]) as f:
+    src = f.read()
+OLD_ZFORK = (
+    '    if (pid == -1) {\n'
+    '\tzerr("fork failed: %e", errno);\n'
+    '\treturn -1;\n'
+    '    }'
+)
+NEW_ZFORK = (
+    '    if (pid == -1) {\n'
+    '#ifdef __EMSCRIPTEN__\n'
+    '\tif (errno == ENOSYS)\n'
+    '\t    return -1;\t/* fork() unavailable in wasm \xe2\x80\x94 caller handles this silently */\n'
+    '#endif\n'
+    '\tzerr("fork failed: %e", errno);\n'
+    '\treturn -1;\n'
+    '    }'
+)
+if OLD_ZFORK in src:
+    src = src.replace(OLD_ZFORK, NEW_ZFORK, 1)
+elif NEW_ZFORK in src:
+    pass  # already patched
+else:
+    print('ERROR: could not find zfork error block in exec.c', file=__import__('sys').stderr)
+    raise SystemExit(1)
+OLD = (
+    '    if ((cmdoutpid = pid = zfork(NULL)) == -1) {\n'
+    '\t/* fork error */\n'
+    '\tzclose(pipes[0]);\n'
+    '\tzclose(pipes[1]);\n'
+    '\terrflag |= ERRFLAG_ERROR;\n'
+    '\tcmdoutpid = 0;\n'
+    '\tchild_unblock();\n'
+    '\treturn NULL;\n'
+    '    } else if (pid) {'
+)
+NEW = (
+    '    if ((cmdoutpid = pid = zfork(NULL)) == -1) {\n'
+    '\t/* fork error */\n'
+    '#ifdef __EMSCRIPTEN__\n'
+    '\t/* Wasm: fork() is unavailable; run the substituted command in-process.\n'
+    '\t * Variable assignments inside $() leak to the parent shell.\n'
+    '\t * Output larger than the pipe buffer may deadlock; both are acceptable\n'
+    '\t * for the script workloads zsh-wasm targets. */\n'
+    '\t{\n'
+    '\t\tLinkList retval;\n'
+    '\t\tint oldout = dup(1);\n'
+    '\t\tif (oldout == -1 || dup2(pipes[1], 1) == -1) {\n'
+    '\t\t\tif (oldout != -1) close(oldout);\n'
+    '\t\t\tzclose(pipes[0]);\n'
+    '\t\t\tzclose(pipes[1]);\n'
+    '\t\t\terrflag |= ERRFLAG_ERROR;\n'
+    '\t\t\tcmdoutpid = 0;\n'
+    '\t\t\tchild_unblock();\n'
+    '\t\t\treturn NULL;\n'
+    '\t\t}\n'
+    '\t\tzclose(pipes[1]);\n'
+    '\t\terrflag = 0;\n'
+    '\t\tcmdoutpid = 0;\n'
+    '\t\tcmdpush(CS_CMDSUBST);\n'
+    '\t\texecode(prog, 0, 1, "cmdsubst");\n'
+    '\t\tcmdpop();\n'
+    '\t\tcmdoutval = lastval;\n'
+    '\t\tfflush(stdout);\n'
+    '\t\tdup2(oldout, 1);\n'
+    '\t\tclose(oldout);\n'
+    '\t\tchild_unblock();\n'
+    '\t\terrflag = 0;\t/* discard fork-failure errflag; errors are in cmdoutval */\n'
+    '\t\tretval = readoutput(pipes[0], qt, NULL);\n'
+    '\t\tfdtable[pipes[0]] = FDT_UNUSED;\n'
+    '\t\tlastval = cmdoutval;\n'
+    '\t\treturn retval;\n'
+    '\t}\n'
+    '#endif\n'
+    '\tzclose(pipes[0]);\n'
+    '\tzclose(pipes[1]);\n'
+    '\terrflag |= ERRFLAG_ERROR;\n'
+    '\tcmdoutpid = 0;\n'
+    '\tchild_unblock();\n'
+    '\treturn NULL;\n'
+    '    } else if (pid) {'
+)
+if OLD not in src:
+    print('ERROR: could not find fork-error block in exec.c', file=__import__('sys').stderr)
+    raise SystemExit(1)
+with open(sys.argv[1], 'w') as f:
+    f.write(src.replace(OLD, NEW, 1))
+PYEOF
+    echo "    exec.c: patched for wasm command substitution"
+fi
+
 echo "==> configuring"
 if [[ -f "$BUILD/Makefile" ]]; then
     echo "    already configured (delete build-zsh/ to reconfigure from scratch)"

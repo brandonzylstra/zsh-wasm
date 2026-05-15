@@ -238,8 +238,7 @@ const tests = [
       expected: 'yes' },
     { name: 'command-subst',
       script: 'result=$(echo hello); echo $result',
-      expected: 'hello',
-      knownFail: true },
+      expected: 'hello' },
     // head/tail defaults
     { name: 'head-default',
       script: "printf 'l1\\nl2\\nl3\\nl4\\nl5\\nl6\\nl7\\nl8\\nl9\\nl10\\nl11\\nl12\\n' > /tmp/hddef.txt\nhead /tmp/hddef.txt",
@@ -300,6 +299,70 @@ const tests = [
     { name: 'sed-addr-range',
       script: "printf 'a\\nb\\nc\\nd\\n' > /tmp/sar.txt\nsed '2,3s/.*/X/' /tmp/sar.txt",
       expected: 'a\nX\nX\nd' },
+    // string operations (parameter expansion — no fork)
+    { name: 'string-length',
+      script: 's=hello; echo ${#s}',
+      expected: '5' },
+    { name: 'string-slice',
+      script: 's=hello; echo ${s:1:3}',
+      expected: 'ell' },
+    { name: 'string-replace',
+      script: 's=hello; echo ${s/l/r}',
+      expected: 'herlo' },
+    { name: 'string-strip-prefix',
+      script: 's=foobar; echo ${s#foo}',
+      expected: 'bar' },
+    { name: 'string-strip-suffix',
+      script: 's=foobar; echo ${s%bar}',
+      expected: 'foo' },
+    // brace expansion
+    { name: 'brace-range',
+      script: 'echo {1..5}',
+      expected: '1 2 3 4 5' },
+    { name: 'brace-list',
+      script: 'echo {a,b,c}',
+      expected: 'a b c' },
+    // array operations
+    { name: 'array-join',
+      script: 'a=(a b c); echo ${(j:,:)a}',
+      expected: 'a,b,c' },
+    { name: 'array-element',
+      script: 'a=(x y z); echo $a[2]',
+      expected: 'y' },
+    { name: 'assoc-array',
+      script: 'typeset -A h; h[key]=val; echo $h[key]',
+      expected: 'val' },
+    // redirect
+    { name: 'append-redirect',
+      script: 'echo a > /tmp/ar.txt; echo b >> /tmp/ar.txt; cat /tmp/ar.txt',
+      expected: 'a\nb' },
+    // logical operators
+    { name: 'and-chain',
+      script: 'true && echo yes',
+      expected: 'yes' },
+    { name: 'or-chain',
+      script: 'false || echo yes',
+      expected: 'yes' },
+    // printf format
+    { name: 'printf-pad',
+      script: "printf '%05d\\n' 42",
+      expected: '00042' },
+    // $(< file) — resolved without fork via simple_redir_name() fast path
+    { name: 'file-read-subst',
+      script: "echo hello > /tmp/frs.txt; echo $(< /tmp/frs.txt)",
+      expected: 'hello' },
+    // command substitution (requires in-process capture patch in exec.c)
+    { name: 'cmd-subst-nested',
+      script: 'x=$(echo world); echo hello $x',
+      expected: 'hello world' },
+    // zsh/files module builtins (linked statically, no fork)
+    { name: 'zf-rm',
+      script: "echo test > /tmp/zfr.txt; zf_rm /tmp/zfr.txt; [[ ! -f /tmp/zfr.txt ]] && echo gone || echo present",
+      expected: 'gone' },
+    // zsh/stat module (linked statically, no fork)
+    { name: 'zstat-size',
+      script: "printf 'hello\\n' > /tmp/zst.txt; zstat -H s /tmp/zst.txt; echo $s[size]",
+      expected: '6' },
 ];
 
 const tbody = document.getElementById('results');
@@ -347,7 +410,7 @@ function updateSummary() {
     const total = passed + failed;
     let text = `${passed} / ${total} passed`;
     if (failed) text += ` — ${failed} FAILED`;
-    if (xfailed) text += ` — ${xfailed} expected failure${xfailed > 1 ? 's' : ''} (pending rebuild)`;
+    if (xfailed) text += ` — ${xfailed} expected failure${xfailed > 1 ? 's' : ''}`;
     summary.textContent = text;
     summary.className = failed ? 'has-fail' : (passed + xfailed === tests.length ? 'all-pass' : '');
 }

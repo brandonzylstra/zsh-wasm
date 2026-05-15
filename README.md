@@ -255,11 +255,14 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-70 test cases cover: shell builtins (echo, printf, if, for, while, case, function),
+88 test cases cover: shell builtins (echo, printf, if, for, while, case, function),
 all shims, glob patterns, recursive globs, stdin, exit codes, POSIX regex via `=~`
 (anchors, alternation, character classes, `+`/`?`/`{n}` quantifiers), multi-file
-grep and wc, sort combined flags, cut open-ended field ranges, and sed (substitution,
-deletion, address ranges, `-n`/`-e`).
+grep and wc, sort combined flags, cut open-ended field ranges, sed (substitution,
+deletion, address ranges, `-n`/`-e`), string operations (length, slice, replace,
+strip-prefix/suffix), brace expansion, array/associative-array operations, append
+redirect, logical operators, `$(...)` command substitution, `$(< file)` file
+substitution, `zf_rm`, and `zstat`.
 
 Scripts
 -------
@@ -401,6 +404,12 @@ Known Limitations
   provided shims or zsh builtins instead.
 - **No ZLE** — the interactive line editor and completion system are excluded from
   the build (they require a real terminal and add ~350KB to the binary).
+- **`$(...)` command substitution is in-process** — zsh-wasm patches `getoutput()`
+  to run the substituted command in the current process rather than a fork. Two
+  consequences: (1) variable assignments inside `$(...)` leak to the parent shell
+  (no subshell isolation); (2) output larger than the OS pipe buffer (~64 KB) would
+  deadlock. For typical scripting workloads neither limit matters. `$(< file)` is
+  handled by a separate fast path and has no such restrictions.
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
 - **`date` has no timezone** — outputs UTC regardless of system locale.
