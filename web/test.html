@@ -33,9 +33,10 @@
   }
   td { padding: 0.35rem 0.8rem; border-bottom: 1px solid #21262d; vertical-align: top; }
   tr:last-child td { border-bottom: none; }
-  .status-pass { color: #3fb950; }
-  .status-fail { color: #f85149; }
-  .status-run  { color: #e3b341; }
+  .status-pass  { color: #3fb950; }
+  .status-fail  { color: #f85149; }
+  .status-run   { color: #e3b341; }
+  .status-xfail { color: #8b949e; }
   .test-name { color: #79c0ff; }
   pre.detail {
     margin: 0.3rem 0 0;
@@ -191,15 +192,29 @@ const tests = [
     { name: 'grep-dot-glob',
       script: "printf 'hello\\nhxllo\\n' > /tmp/gd.txt\ngrep 'h.llo' /tmp/gd.txt",
       expected: '' },
+    // =~ (POSIX regex): zsh/regex was compiled out (link=no); fix is in bin/setup but needs rebuild.
+    // These are knownFail — they show on the page but don't count against the pass total.
+    // After rebuild: all three should pass, grep-dot-glob expected should change to 'hello\nhxllo',
+    // and grep shim should be reverted from case-glob back to [[ $line =~ $pat ]].
+    { name: 'regex-basic',    knownFail: true,
+      script: '[[ hello =~ ell ]] && echo yes || echo no',
+      expected: 'yes' },
+    { name: 'regex-dot',      knownFail: true,
+      script: '[[ hello =~ h.llo ]] && echo yes || echo no',
+      expected: 'yes' },
+    { name: 'regex-no-match', knownFail: true,
+      script: '[[ hello =~ xyz ]] && echo yes || echo no',
+      expected: 'no' },
 ];
 
 const tbody = document.getElementById('results');
 const summary = document.getElementById('summary');
-let passed = 0, failed = 0;
+let passed = 0, failed = 0, xfailed = 0;
 
-function addRow(name) {
+function addRow(name, knownFail = false) {
     const tr = document.createElement('tr');
     tr.id = 'row-' + name;
+    if (knownFail) tr.setAttribute('data-known-fail', '');
     tr.innerHTML = `
         <td class="test-name">${name}</td>
         <td><span class="status-run" data-test-status="running">running</span></td>
@@ -208,12 +223,22 @@ function addRow(name) {
     return tr;
 }
 
-function updateRow(tr, pass, actual, expectedStr) {
+function updateRow(tr, pass, actual, expectedStr, knownFail = false) {
     const statusEl = tr.querySelector('[data-test-status]');
-    statusEl.className = pass ? 'status-pass' : 'status-fail';
-    statusEl.textContent = pass ? 'pass' : 'FAIL';
-    statusEl.setAttribute('data-test-status', pass ? 'pass' : 'fail');
-    if (!pass) {
+    if (pass) {
+        statusEl.className = 'status-pass';
+        statusEl.textContent = 'pass';
+        statusEl.setAttribute('data-test-status', 'pass');
+    } else if (knownFail) {
+        statusEl.className = 'status-xfail';
+        statusEl.textContent = 'xfail';
+        statusEl.setAttribute('data-test-status', 'xfail');
+        tr.cells[2].innerHTML =
+            `<pre class="detail">expected: ${esc(expectedStr)}\n  actual: ${esc(actual)}</pre>`;
+    } else {
+        statusEl.className = 'status-fail';
+        statusEl.textContent = 'FAIL';
+        statusEl.setAttribute('data-test-status', 'fail');
         tr.cells[2].innerHTML =
             `<pre class="detail">expected: ${esc(expectedStr)}\n  actual: ${esc(actual)}</pre>`;
     }
@@ -225,14 +250,18 @@ function esc(s) {
 
 function updateSummary() {
     const total = passed + failed;
-    summary.textContent = `${passed} / ${total} passed${failed ? ` — ${failed} FAILED` : ''}`;
-    summary.className = failed ? 'has-fail' : (total === tests.length ? 'all-pass' : '');
+    let text = `${passed} / ${total} passed`;
+    if (failed) text += ` — ${failed} FAILED`;
+    if (xfailed) text += ` — ${xfailed} expected failure${xfailed > 1 ? 's' : ''} (pending rebuild)`;
+    summary.textContent = text;
+    summary.className = failed ? 'has-fail' : (passed + xfailed === tests.length ? 'all-pass' : '');
 }
 
 summary.textContent = `Running 0 / ${tests.length}…`;
 
 for (const t of tests) {
-    const tr = addRow(t.name);
+    const kf = !!t.knownFail;
+    const tr = addRow(t.name, kf);
     let result;
     try {
         result = await runZshScript(t.script, { stdin: t.stdin ?? null });
@@ -254,8 +283,10 @@ for (const t of tests) {
             expectedStr += ` (exit ${t.expectedExitCode})`;
         }
     }
-    pass ? passed++ : failed++;
-    updateRow(tr, pass, actual, expectedStr);
+    if (pass) passed++;
+    else if (kf) xfailed++;
+    else failed++;
+    updateRow(tr, pass, actual, expectedStr, kf);
     updateSummary();
 }
 
