@@ -1,10 +1,7 @@
 Zsh Wasm
 ========
 
-Compile the Z Shell for web assembly using emscripten.
-
-Built to support the Zsh cheatsheet on [Ruby.CodeCompared.To/Zsh](https://Ruby.CodeCompared.To/Zsh)
-since Zsh is the default shell on macOS, the OS historically used by a majority of Rubyists.
+Compile the Z Shell for WebAssembly using Emscripten, so it can run inside a browser.
 
 Demo
 ----
@@ -59,18 +56,11 @@ emconfigure ../zsh-5.9/configure \
 
 ### 4. Patch generated config.h
 
-Two configure tests produce wrong results under emscripten:
+Two configure tests produce wrong results under emscripten. Use the provided script
+(idempotent — safe to run again after any `make prep`):
 
 ```
-# Disable setresuid/setresgid — declared in emcc libc but not in its headers
-sed -i '' 's/^#define HAVE_SETRESGID 1/\/* #define HAVE_SETRESGID 1 *\//' config.h
-sed -i '' 's/^#define HAVE_SETRESUID 1/\/* #define HAVE_SETRESUID 1 *\//' config.h
-
-# Enable tgoto prototype (our ncurses stub doesn't auto-declare it)
-sed -i '' 's|\/\* #undef TGOTO_PROTO_MISSING \*\/|#define TGOTO_PROTO_MISSING 1|' config.h
-
-# Enable term.h support so ncurses headers get included transitively
-sed -i '' 's|\/\* #undef ZSH_HAVE_TERM_H \*\/|#define ZSH_HAVE_TERM_H 1|' config.h
+bin/patch-config
 ```
 
 Also patch the generated build files:
@@ -83,7 +73,9 @@ sed -i '' 's/^ZSH_TERM_H = $/ZSH_TERM_H = term.h/' Config/defs.mk
 echo '#include <term.h>' > Src/zshterm.h
 ```
 
-### 5. Disable ZLE and completion modules
+### 5. Configure modules
+
+#### 5a. Disable ZLE and completion modules
 
 ZLE (the interactive line editor) and the completion system are not usable without
 a real terminal, so we exclude them to reduce binary size (~350KB savings).
@@ -108,10 +100,28 @@ sed -i '' -E \
   config.modules
 ```
 
-Then regenerate the Makefiles:
+#### 5b. Enable zsh/files and zsh/stat
+
+`zsh/files` provides file-operation builtins (`zf_mkdir`, `zf_rm`, etc.) that work
+without forking. `zsh/stat` provides `zstat` for reading file metadata.
+
+```
+sed -i '' -E \
+  -e 's/^(name=zsh\/(files|stat) .*)link=no/\1link=static/' \
+  -e 's/^(name=zsh\/(files|stat) .*)load=no/\1load=yes/' \
+  config.modules
+```
+
+#### 5c. Regenerate Makefiles
 
 ```
 emmake make prep
+```
+
+After `make prep`, re-run `bin/patch-config` — it regenerates `config.h` and wipes the patches:
+
+```
+bin/patch-config
 ```
 
 ### 6. Build
@@ -140,6 +150,16 @@ cd ..
 cd web
 python3 -m http.server
 # open http://localhost:8000/
+```
+
+Quick Rebuild
+-------------
+
+After the initial setup, use the provided scripts instead of repeating steps 5c–7:
+
+```
+bin/build           # make prep + patch config.h + emmake make + deploy to web/
+bin/patch-config    # re-apply config.h patches only (idempotent)
 ```
 
 Using in HTML
@@ -176,18 +196,40 @@ before loading the loader:
 ```
 
 With IDBFS, files written under `/home/user` persist across page reloads and
-are shared between all examples on the page (each run syncs in from IndexedDB
+are shared between all script blocks on the page (each run syncs in from IndexedDB
 before executing and syncs out after).
+
+### Built-in shims
+
+WebAssembly cannot `fork`, so external binaries (`touch`, `cat`, `ls`, etc.) fail
+with "function not implemented". The loader prepends zsh function shims for the
+most common ones:
+
+| Command  | Flags supported      | Notes |
+|----------|----------------------|-------|
+| `ls`     | `-a`/`-A` `-l` `-R`  | `-l` shows real mode/size/mtime via `zstat`; `-a` includes dotfiles; `-R` recurses |
+| `touch`  | —                    | creates or updates files |
+| `cat`    | —                    | reads files via `$(<file)` substitution |
+| `cp`     | —                    | single-file copy |
+| `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
+| `wc`     | —                    | line count only |
+| `head`   | `-n N`, `-N`         | first N lines (default 10) |
+| `tail`   | `-n N`, `-N`         | last N lines (default 10) |
+| `grep`   | —                    | POSIX regex via zsh `=~`; no flags |
+
+`mkdir` and `rm` work natively — Emscripten supports those syscalls directly without forking.
 
 Known Limitations
 -----------------
 
 - **No job control** — `sigsuspend`, `prlimit`, `getrusage` syscalls are stubs or
   unsupported; you'll see harmless warnings in the console.
-- **No filesystem persistence by default** — use `ZshWasmConfig = { fs: 'idbfs' }`
-  to enable IndexedDB-backed persistence.
+- **No fork** — external binaries that aren't shimmed above will fail. Use the
+  provided shims or zsh builtins instead.
 - **No ZLE** — the interactive line editor and completion system are excluded from
   the build (they require a real terminal and add ~350KB to the binary).
+- **`wc` counts lines only** — no word or byte count.
+- **`grep` has no flags** — no `-i`, `-v`, `-n`, etc.
 
 License
 -------

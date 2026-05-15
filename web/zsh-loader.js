@@ -53,6 +53,58 @@ const IDBFS_MOUNT = '/home/user';
 const BUILTINS_PREAMBLE = `\
 touch() { local f; for f; do : >> "$f"; done }
 cat()   { local f; for f; do print -r -- "$(<$f)"; done }
+wc() {
+  local f
+  for f; do
+    local -a lines=("\${(@f)$(<$f)}")
+    printf '%7d %s\\n' \${#lines} "$f"
+  done
+}
+head() {
+  local n=10
+  [[ $1 == -[0-9]* ]] && n=\${1#-} && shift
+  [[ $1 == -n      ]] && n=$2      && shift 2
+  local f
+  for f; do
+    local -a lines=("\${(@f)$(<$f)}")
+    print -l -- \${lines[1,$n]}
+  done
+}
+tail() {
+  local n=10
+  [[ $1 == -[0-9]* ]] && n=\${1#-} && shift
+  [[ $1 == -n      ]] && n=$2      && shift 2
+  local f
+  for f; do
+    local -a lines=("\${(@f)$(<$f)}")
+    print -l -- \${lines[-$n,-1]}
+  done
+}
+grep() {
+  local pat=$1; shift
+  local f line
+  for f; do
+    while IFS= read -r line; do
+      [[ $line =~ $pat ]] && print -- "$line"
+    done < "$f"
+  done
+}
+_ls_modestr() {
+  local m=$1 t p=''
+  if   (( (m & 0170000) == 0040000 )); then t=d
+  elif (( (m & 0170000) == 0120000 )); then t=l
+  elif (( (m & 0170000) == 0100000 )); then t=-
+  elif (( (m & 0170000) == 0060000 )); then t=b
+  elif (( (m & 0170000) == 0020000 )); then t=c
+  elif (( (m & 0170000) == 0010000 )); then t=p
+  else t='?'
+  fi
+  local -a ms=(0400 0200 0100 0040 0020 0010 0004 0002 0001)
+  local -a cs=(r    w    x    r    w    x    r    w    x   )
+  local i
+  for (( i=1; i<=9; i++ )); do (( m & ms[i] )) && p+=$cs[i] || p+='-'; done
+  print -- "$t$p"
+}
 ls() {
   local show_all=0 long=0 recursive=0
   local -a args
@@ -72,14 +124,15 @@ ls() {
   elif (( show_all ));              then files=($d/*(DN))
   else                                   files=($d/*(N))
   fi
-  local f name
+  (( long )) && zmodload zsh/datetime 2>/dev/null
+  local f name mode size mtime
   for f in $files; do
     (( recursive )) && name="\${f#\${d%/}/}" || name="\${f:t}"
     if (( long )); then
-      if   [[ -d $f ]]; then print "d  $name"
-      elif [[ -L $f ]]; then print "l  $name"
-      else                   print "-  $name"
-      fi
+      mode=$(zstat +mode "$f")
+      size=$(zstat +size "$f")
+      mtime=$(zstat +mtime "$f")
+      printf '%s %6d %s %s\\n' "$(_ls_modestr $mode)" "$size" "$(strftime '%b %e %H:%M' $mtime)" "$name"
     else
       print $name
     fi
