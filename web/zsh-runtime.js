@@ -272,7 +272,13 @@ cut() {
           out+=("\${parts[$fspec]}")
         fi
       done
-      print -- "\${(j[$delim])out}"
+      local _jo='' _jf=1
+      for _o in "\${(@)out}"; do
+        if (( _jf )); then _jo=$_o _jf=0
+        else               _jo+=\$delim$_o
+        fi
+      done
+      print -- "$_jo"
     done
   done
 }

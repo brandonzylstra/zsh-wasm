@@ -54,12 +54,19 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 22 test cases and compares actual vs. expected output:
+`web/test.html` runs 51 test cases and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
-Covers: shell builtins, all shims (touch, cat, cp, mv, wc, head, tail, grep, ls),
-glob patterns, recursive globs, and module loading (`zsh/datetime`).
+Covers: shell builtins, all shims (touch, cat, cp, mv, wc, head, tail, grep, ls,
+sort, uniq, cut, tr, date), glob patterns, recursive globs, module loading
+(`zsh/datetime`), stdin, exit codes, and POSIX regex (`=~`, grep anchors,
+alternation, character classes).
+
+The runner supports a `knownFail` flag on individual tests: these display on
+the page as grey `xfail` entries with expected/actual detail, are excluded from
+the Playwright failure count, and serve as a live record of known broken
+behaviour pending a fix.
 
 ---
 
@@ -118,22 +125,35 @@ site, but not needed for the primary use case of running scripted examples.
 
 ---
 
-### sed shim
+### sed
 
-`sed` is ubiquitous but implementing it faithfully in zsh (address ranges,
-multiple commands, in-place editing) is complex. A basic single-substitution
-`s/pattern/replacement/` covering the common case may be feasible; full sed
-compatibility is not.
+Two viable approaches:
 
-Not blocked on Web Workers — complexity is the only obstacle.
+**Zsh shim (lower effort)** — now feasible since `=~` and `$MATCH`/`$match`
+are working. Can cover `s/pat/repl/[g]`, `/pat/d`, `/pat/p`, `-n`, basic
+line-range addressing, and `\1` backreferences via `$match[N]`. Covers ~80%
+of real-world sed usage. Incompatible with hold space, branch/label, and
+multi-expression scripts.
+
+**Compiled wasm (higher effort, full compatibility)** — sed is pure C with no
+hard dependencies. Compile GNU sed or OpenBSD sed with emscripten as a
+standalone `sed.wasm`. The JS worker intercepts calls to the `sed` command and
+runs the separate module, sharing the emscripten filesystem. Gives true
+compatibility at the cost of additional build machinery and ~150–300 KB.
+
+Recommended path: implement the zsh shim first (high value, low risk), then
+revisit compiled wasm if compatibility gaps are hit in practice.
 
 ---
 
-### awk shim
+### awk
 
-`awk` field splitting and pattern-action rules could be approximated in zsh
-for simple scripts, but anything beyond trivial `awk '{print $1}'` usage would
-require a near-complete reimplementation. Low priority; most awk use cases can
-be replaced with zsh parameter expansion.
+**Zsh shim** covers `awk '{print $N}'`, `-F sep`, `NR`/`NF`, simple
+`BEGIN`/`END` — but anything with user-defined functions, arrays, or complex
+pattern-action pairs requires near-complete reimplementation. Shim ceiling is
+low.
 
-Not blocked on Web Workers — complexity is the only obstacle.
+**Compiled wasm** is the better long-term answer. mawk is ~5 KLOC of portable
+C, compiles cleanly, and produces a ~250 KB wasm module. Same JS interception
+architecture as sed above. Deferred until the multi-module wasm loading
+pattern is established (likely alongside or after sed).
