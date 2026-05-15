@@ -139,6 +139,117 @@ ls() {
 }
 cp() { print -r -- "$(<$1)" > "$2" }
 mv() { cp "$1" "$2" && zf_rm "$1" }
+date() {
+  zmodload zsh/datetime 2>/dev/null
+  local fmt='%a %b %e %H:%M:%S UTC %Y'
+  [[ $1 == +* ]] && fmt=\${1#+}
+  strftime $fmt $EPOCHSECONDS
+}
+sort() {
+  local rev=0 num=0 uniq_flag=0
+  local -a args
+  for a; do
+    if [[ $a == -* ]]; then
+      [[ $a == *r* ]] && rev=1
+      [[ $a == *n* ]] && num=1
+      [[ $a == *u* ]] && uniq_flag=1
+    else
+      args+=($a)
+    fi
+  done
+  local -a lines
+  local f
+  for f in $args; do lines+=("\${(@f)$(<$f)}"); done
+  if   (( num && rev )); then lines=("\${(@On)lines}")
+  elif (( num ));        then lines=("\${(@on)lines}")
+  elif (( rev ));        then lines=("\${(@O)lines}")
+  else                        lines=("\${(@o)lines}")
+  fi
+  if (( uniq_flag )); then
+    local -a u; local prev; local first=1
+    for l in "\${(@)lines}"; do
+      if (( first )) || [[ $l != $prev ]]; then u+=("$l"); prev=$l; first=0; fi
+    done
+    lines=("\${(@)u}")
+  fi
+  (( \${#lines} )) && print -l -- "\${(@)lines}"
+}
+uniq() {
+  local -a args
+  for a; do [[ $a != -* ]] && args+=($a); done
+  local -a lines
+  (( \${#args} )) && lines=("\${(@f)$(<$args[1])}")
+  local prev line first=1
+  for line in "\${(@)lines}"; do
+    if (( first )) || [[ $line != $prev ]]; then print -- "$line"; prev=$line; first=0; fi
+  done
+}
+cut() {
+  local delim=$'\\t' fields=''
+  local -a args
+  while (( $# )); do
+    case $1 in
+      -d)  shift; delim=$1 ;;
+      -d*) delim=\${1#-d} ;;
+      -f)  shift; fields=$1 ;;
+      -f*) fields=\${1#-f} ;;
+      -*)  ;;
+      *)   args+=($1) ;;
+    esac
+    shift
+  done
+  local sep=$'\\x01'
+  local f
+  for f in $args; do
+    local -a lines=("\${(@f)$(<$f)}")
+    local line
+    for line in "\${(@)lines}"; do
+      local -a parts=("\${(@s[$sep])\${line//\$delim/\$sep}}")
+      local -a out
+      local fspec
+      for fspec in \${(s:,:)fields}; do
+        if [[ $fspec == *-* ]]; then
+          local s=\${fspec%-*} e=\${fspec#*-}
+          [[ -z $s ]] && s=1
+          [[ -z $e ]] && e=\${#parts}
+          out+=("\${(@)parts[$s,$e]}")
+        else
+          out+=("\${parts[$fspec]}")
+        fi
+      done
+      print -- "\${(j[$delim])out}"
+    done
+  done
+}
+tr() {
+  local delete=0
+  local -a args
+  for a; do
+    [[ $a == -d ]] && delete=1 && continue
+    [[ $a == -* ]] && continue
+    args+=($a)
+  done
+  local content
+  IFS= read -r -d '' content
+  if (( delete )); then
+    local c
+    for (( i=1; i<=\${#args[1]}; i++ )); do
+      c=\${args[1][$i]}
+      content=\${content//$c}
+    done
+  else
+    local set1=\${args[1]} set2=\${args[2]}
+    if   [[ $set1 == 'a-z' && $set2 == 'A-Z' ]]; then content=\${(U)content}
+    elif [[ $set1 == 'A-Z' && $set2 == 'a-z' ]]; then content=\${(L)content}
+    else
+      local i
+      for (( i=1; i<=\${#set1} && i<=\${#set2}; i++ )); do
+        content=\${content//\${set1[$i]}/\${set2[$i]}}
+      done
+    fi
+  fi
+  print -rn -- "$content"
+}
 `;
 
 // Runs a zsh script and returns { stdout, stderr } as plain strings.
