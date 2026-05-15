@@ -197,6 +197,18 @@ bin/setup
 bin/build
 ```
 
+`bin/build` accepts two optional flags:
+
+```
+bin/build [--debug] [--out DIR]
+
+  --debug      Compile with -O0 -g instead of -Os, and link with
+               -sASSERTIONS=1 -gsource-map. Produces a larger build with
+               readable stack traces in browser devtools. Never ship this.
+  --out DIR    Deploy zsh.js and zsh.wasm to DIR instead of web/
+               (useful when building for an npm package or other output target)
+```
+
 JS modules
 ----------
 

@@ -1,18 +1,43 @@
 #!/usr/bin/env bash
-# Rebuilds zsh.wasm from the configured build-zsh/ tree and deploys to web/.
+# Rebuilds zsh.wasm from the configured build-zsh/ tree and deploys it.
+#
+# Usage: bin/build [--debug] [--out DIR]
+#
+#   --debug      Compile with -O0 -g instead of -Os, and link with
+#                -sASSERTIONS=1 -gsource-map. Produces a larger but debuggable
+#                build — readable stack traces in browser devtools. Never ship.
+#   --out DIR    Deploy zsh.js and zsh.wasm to DIR instead of web/
 #
 # Prerequisites (one-time setup — see README):
 #   1. zsh-5.9/ source directory
-#   2. ncurses-stub built (cd ncurses-stub && emcc -c … && emar …)
-#   3. build-zsh/ configured via emconfigure
-#   4. zutil.mdd / zutil.c source patches applied
+#   2. ncurses-stub built  (bin/setup handles this)
+#   3. build-zsh/ configured via emconfigure  (bin/setup handles this)
+#   4. zutil.mdd / zutil.c source patches applied  (bin/setup handles this)
 #
-# After that, just run:   bin/build
+# After bin/setup, just run:   bin/build
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/build-zsh"
 STUB="$ROOT/ncurses-stub"
+ORIG_DIR="$(pwd)"
+
+DEBUG=0
+OUT_DIR="$ROOT/web"
+
+while (( $# )); do
+    case $1 in
+        --debug)   DEBUG=1 ;;
+        --out)     shift; OUT_DIR=$1 ;;
+        --out=*)   OUT_DIR=${1#--out=} ;;
+        *)         echo "Unknown option: $1" >&2; exit 1 ;;
+    esac
+    shift
+done
+
+# Resolve a relative --out path against the caller's working directory,
+# not build-zsh/ (where we cd below).
+[[ "$OUT_DIR" != /* ]] && OUT_DIR="$ORIG_DIR/$OUT_DIR"
 
 cd "$BUILD"
 
@@ -22,18 +47,33 @@ emmake make prep
 echo "==> patching config.h"
 "$ROOT/bin/patch-config"
 
-echo "==> building"
+if (( DEBUG )); then
+    BUILD_CFLAGS="-O0 -g"
+    EXTRA_LDFLAGS="-sASSERTIONS=1 -gsource-map"
+    echo "==> building (debug: -O0 -g -sASSERTIONS=1 -gsource-map)"
+else
+    BUILD_CFLAGS="-Os"
+    EXTRA_LDFLAGS=""
+    echo "==> building"
+fi
+
 emmake make \
-  LDFLAGS="-L$STUB/lib \
-    -sFORCE_FILESYSTEM=1 \
-    -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
-    -sMODULARIZE=1 \
-    -sEXPORT_NAME=createZshModule \
-    -lidbfs.js"
+    CFLAGS="$BUILD_CFLAGS" \
+    LDFLAGS="-L$STUB/lib \
+        -sFORCE_FILESYSTEM=1 \
+        -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
+        -sMODULARIZE=1 \
+        -sEXPORT_NAME=createZshModule \
+        -lidbfs.js \
+        $EXTRA_LDFLAGS"
 
-echo "==> deploying to web/"
-cp Src/zsh      "$ROOT/web/zsh.js"
-cp Src/zsh.wasm "$ROOT/web/zsh.wasm"
+echo "==> deploying to $OUT_DIR"
+mkdir -p "$OUT_DIR"
+cp Src/zsh      "$OUT_DIR/zsh.js"
+cp Src/zsh.wasm "$OUT_DIR/zsh.wasm"
+if (( DEBUG )) && [[ -f Src/zsh.wasm.map ]]; then
+    cp Src/zsh.wasm.map "$OUT_DIR/zsh.wasm.map"
+fi
 
-SIZE=$(du -h "$ROOT/web/zsh.wasm" | cut -f1)
-echo "Done — zsh.wasm is $SIZE"
+SIZE=$(du -h "$OUT_DIR/zsh.wasm" | cut -f1)
+echo "Done — $OUT_DIR/zsh.wasm is $SIZE"
