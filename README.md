@@ -202,9 +202,11 @@ JS modules
 
 `zsh.js` and `zsh.wasm` are the compiled wasm artifacts. Two JS modules support them:
 
+- **`zsh-worker.js`** — Web Worker entry point. Loaded by `zsh-runtime.js`; imports
+  `zsh.js` via `importScripts`, runs the wasm off the main thread, posts back results.
 - **`zsh-runtime.js`** — core runner, no DOM dependencies. Exports `runZshScript(src)`
-  which returns `{ stdout, stderr }` as strings. Also exports `ansiToHtml`,
-  `BUILTINS_PREAMBLE`, and the `ZSH_FS` / `IDBFS_MOUNT` constants.
+  which spawns a worker and returns `Promise<{ stdout, stderr }>`. Also exports
+  `ansiToHtml`, `BUILTINS_PREAMBLE`, `ZSH_FS`, and `IDBFS_MOUNT`.
 - **`zsh-loader.js`** — DOM layer. Imports from `zsh-runtime.js`, adds CodeMirror
   editors, Run/Copy buttons, and handles `<script type="text/zsh">` auto-run tags.
 
@@ -212,9 +214,8 @@ Using in HTML
 -------------
 
 ```html
-<!-- load the wasm module -->
-<script src="./zsh.js"></script>
 <!-- load the helper that runs <script type="text/zsh"> tags -->
+<!-- zsh.js and zsh.wasm are loaded automatically inside a Web Worker -->
 <script src="./zsh-loader.js" type="module"></script>
 
 <!-- inline zsh script — output goes to #zsh-output -->

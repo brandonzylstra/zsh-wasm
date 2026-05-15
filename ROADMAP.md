@@ -9,16 +9,18 @@ Status labels:
 
 ## Planned
 
-### Web Worker execution
+### Web Worker execution ✓ done
 
-Move wasm execution into a [Web Worker](https://developer.mozilla.org/en-US/docs/Web/API/Web_Workers_API) so scripts run off the main thread.
+Wasm runs in a dedicated Web Worker (`zsh-worker.js`). `zsh-runtime.js` spawns a
+fresh worker per script run, posts the script, and awaits the `{ stdout, stderr }`
+reply. The main thread never blocks.
 
-Benefits:
-- UI stays responsive while zsh runs (no frozen tab)
-- Enables a "Stop" button to terminate runaway scripts
-- Required foundation for the interactive shell (see Possible below)
+Benefits achieved:
+- UI stays responsive while zsh runs
+- Worker is naturally terminated on completion (no leaked instances)
+- Foundation for a future Stop button (`worker.terminate()`)
 
-This is a loader (`zsh-loader.js`) change only — zero impact on wasm binary size.
+Zero impact on wasm binary size — loader change only.
 
 ---
 
