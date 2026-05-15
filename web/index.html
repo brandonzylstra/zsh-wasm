@@ -332,6 +332,14 @@
         </div>
     </div>
 
+    <div class="example">
+        <div class="example-header">Persistent Storage</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-persist"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-persist"></pre></div>
+        </div>
+    </div>
+
 </div>
 
 <!-- zsh scripts — browser ignores unknown type; loader executes them -->
@@ -510,6 +518,31 @@ done <<END
   Hello from $name!
   Version $ZSH_VERSION
 END
+</script>
+
+<script type="text/zsh" data-id="persist" data-stdout="#out-persist" data-stderr="#out-persist">
+# Files under /home/user/ survive page reloads (IndexedDB-backed).
+# Press Run multiple times — the counter increments each visit.
+mkdir -p /home/user
+
+count=0
+[[ -f /home/user/count ]] && count=$(<  /home/user/count)
+(( count++ ))
+echo $count > /home/user/count
+echo "Run count: $count"
+
+# Append a timestamped entry to a log file
+zmodload zsh/datetime
+strftime -s ts '%Y-%m-%d %H:%M:%S' $EPOCHSECONDS
+echo "$ts  run #$count" >> /home/user/visits.log
+
+echo ""
+echo "Last 5 visits:"
+tail -5 /home/user/visits.log
+
+echo ""
+echo "Files in /home/user/:"
+ls -l /home/user/
 </script>
 
 <!-- CodeMirror 5 -->
