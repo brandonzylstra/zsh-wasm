@@ -63,11 +63,17 @@ glob patterns, recursive globs, and module loading (`zsh/datetime`).
 
 ---
 
-### npm package
+### npm package ✓ done
 
-Publish `zsh.js`, `zsh.wasm`, and `zsh-loader.js` as an npm package with a
-clean JS API, so anyone can embed a zsh interpreter in their web project with
-a single `npm install`.
+`npm/package.json` defines the `zsh-wasm` package. After building:
+
+```
+bin/build --out npm/
+cd npm && npm publish
+```
+
+Entry point is `zsh-runtime.js`, which exports `runZshScript(src, { stdin, fs })`.
+The package ships four files: `zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, `zsh.wasm`.
 
 ---
 

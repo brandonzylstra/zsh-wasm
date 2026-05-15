@@ -8,6 +8,37 @@ Demo
 
 Open `web/index.html` (served via an HTTP server — see below) to see zsh running in the browser.
 
+npm package
+-----------
+
+```
+npm install zsh-wasm
+```
+
+```js
+import { runZshScript } from 'zsh-wasm';
+
+const { stdout, stderr } = await runZshScript('echo "Hello from zsh $ZSH_VERSION"');
+console.log(stdout); // Hello from zsh 5.9
+
+// Pass stdin
+const { stdout: out } = await runZshScript('while IFS= read -r line; do echo "> $line"; done', {
+    stdin: 'hello\nworld',
+});
+
+// Use IndexedDB-backed persistence (browser only)
+const { stdout: files } = await runZshScript('ls /home/user', { fs: 'idbfs' });
+```
+
+The package ships `zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, and `zsh.wasm`.
+The script runs in a Web Worker so the main thread never blocks.
+
+**Bundler note:** `zsh-runtime.js` spawns a worker via
+`new Worker(new URL('./zsh-worker.js', import.meta.url))`, which Vite and
+Webpack 5 handle automatically. The `zsh.wasm` binary is loaded by
+Emscripten's runtime relative to the JS file — if your bundler moves the wasm,
+you may need to configure it to emit wasm as a static asset.
+
 How To Build
 ------------
 
