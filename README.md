@@ -321,7 +321,7 @@ most common ones:
 | `wc`     | `-l` `-w` `-c`       | lines, words, bytes; default shows all three |
 | `head`   | `-n N`, `-N`         | first N lines (default 10) |
 | `tail`   | `-n N`, `-N`         | last N lines (default 10) |
-| `grep`   | `-i` `-v` `-n` `-c`  | POSIX regex via zsh `=~`; `-i` best-effort for simple patterns |
+| `grep`   | `-i` `-v` `-n` `-c`  | glob matching only (see Known Limitations); simple string patterns work |
 | `sort`   | `-r` `-n` `-u`       | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)` |
 | `uniq`   | —                    | removes consecutive duplicate lines |
 | `cut`    | `-d DELIM` `-f N`    | field ranges (`1-3`, `2,4`) supported |
@@ -341,6 +341,22 @@ Known Limitations
   the build (they require a real terminal and add ~350KB to the binary).
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`date` has no timezone** — outputs UTC regardless of system locale.
+- **POSIX regex (`=~`) crashes the wasm process** — `[[ str =~ pattern ]]` kills
+  the entire wasm module instead of returning a result. The symptom is an empty
+  stdout even when the pattern doesn't match, because the process aborts before
+  any output is written. Root cause appears to be `regcomp`/`regexec` in
+  emscripten's musl libc calling `abort()`. See ROADMAP.md for investigation
+  notes and possible fixes.
+- **`grep` uses glob matching, not regex** — a consequence of the `=~` crash.
+  Simple string patterns (`grep foo file`) work correctly. Regex metacharacters
+  behave differently from real grep: `.` is a literal dot (not "any character"),
+  `+`/`?`/`|`/`()`/`^`/`$` have no special meaning. Character classes (`[abc]`)
+  use zsh glob syntax and may behave slightly differently from ERE.
+- **stdin is always newline-terminated** — if the string passed as `stdin` does
+  not end with `\n`, one is appended before feeding it to the wasm process. This
+  is the correct POSIX convention for text and is transparent to line-oriented
+  tools (`while read`, `wc -l`, etc.). It adds one spurious byte for
+  byte-counting operations (`wc -c < /dev/stdin`).
 
 License
 -------
