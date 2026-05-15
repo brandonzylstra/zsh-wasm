@@ -3,7 +3,7 @@
 
 importScripts('./zsh.js');
 
-self.onmessage = async ({ data: { src, fs, idbfsMount } }) => {
+self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
     const outLines = [];
     const errLines = [];
 
@@ -17,6 +17,12 @@ self.onmessage = async ({ data: { src, fs, idbfsMount } }) => {
             }
         },
     };
+
+    if (stdin != null) {
+        const bytes = new TextEncoder().encode(stdin);
+        let pos = 0;
+        opts.stdin = () => pos < bytes.length ? bytes[pos++] : null;
+    }
 
     const module = await createZshModule(opts);
 

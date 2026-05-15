@@ -254,7 +254,7 @@ tr() {
 
 // Runs a zsh script off the main thread via a Web Worker.
 // Returns { stdout, stderr } as plain strings.
-export function runZshScript(src) {
+export function runZshScript(src, { stdin = null } = {}) {
     return new Promise((resolve, reject) => {
         const worker = new Worker(new URL('./zsh-worker.js', import.meta.url));
         worker.onmessage = ({ data }) => {
@@ -269,6 +269,7 @@ export function runZshScript(src) {
             src: BUILTINS_PREAMBLE + src + '\n',
             fs: ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
+            stdin,
         });
     });
 }
