@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>zsh-wasm tests</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Courier New', monospace;
+    background: #0d1117;
+    color: #c9d1d9;
+    padding: 2rem;
+    margin: 0;
+  }
+  h1 { color: #f0f6fc; margin: 0 0 1rem; font-size: 1.4rem; }
+  #summary {
+    font-size: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 0.6rem 1rem;
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+  }
+  #summary.all-pass { border-color: #3fb950; color: #3fb950; }
+  #summary.has-fail { border-color: #f85149; color: #f85149; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.85rem; }
+  th {
+    text-align: left;
+    padding: 0.4rem 0.8rem;
+    background: #161b22;
+    color: #8b949e;
+    border-bottom: 1px solid #30363d;
+  }
+  td { padding: 0.35rem 0.8rem; border-bottom: 1px solid #21262d; vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  .status-pass { color: #3fb950; }
+  .status-fail { color: #f85149; }
+  .status-run  { color: #e3b341; }
+  .test-name { color: #79c0ff; }
+  pre.detail {
+    margin: 0.3rem 0 0;
+    padding: 0.5rem;
+    background: #161b22;
+    border-radius: 4px;
+    white-space: pre-wrap;
+    font-size: 0.8rem;
+    color: #8b949e;
+  }
+</style>
+</head>
+<body>
+<h1>zsh-wasm test suite</h1>
+<div id="summary">Initializing…</div>
+<table>
+  <thead><tr><th>Test</th><th>Status</th><th>Expected / Actual</th></tr></thead>
+  <tbody id="results"></tbody>
+</table>
+
+<script src="./zsh.js"></script>
+<script type="module">
+import { runZshScript } from './zsh-runtime.js';
+
+const tests = [
+    // basic shell
+    { name: 'echo',
+      script: 'echo hello',
+      expected: 'hello' },
+    { name: 'variable',
+      script: 'x=42\necho $x',
+      expected: '42' },
+    { name: 'array-count',
+      script: 'a=(x y z)\necho ${#a}',
+      expected: '3' },
+    { name: 'arithmetic',
+      script: 'echo $(( 3 + 4 * 2 ))',
+      expected: '11' },
+    { name: 'string-lower',
+      script: 's=HELLO\necho ${s:l}',
+      expected: 'hello' },
+    // control flow
+    { name: 'if',
+      script: 'if [[ 1 -eq 1 ]]; then echo yes; fi',
+      expected: 'yes' },
+    { name: 'for-loop',
+      script: 'for i in 1 2 3; do echo $i; done',
+      expected: '1\n2\n3' },
+    { name: 'function',
+      script: 'greet() { echo "hi $1" }\ngreet world',
+      expected: 'hi world' },
+    // file shims
+    { name: 'touch-cat',
+      script: 'touch /tmp/tc.txt\necho hello > /tmp/tc.txt\ncat /tmp/tc.txt',
+      expected: 'hello' },
+    { name: 'cp',
+      script: 'echo foo > /tmp/cpsrc.txt\ncp /tmp/cpsrc.txt /tmp/cpdst.txt\ncat /tmp/cpdst.txt',
+      expected: 'foo' },
+    { name: 'mv',
+      script: 'echo bar > /tmp/mvsrc.txt\nmv /tmp/mvsrc.txt /tmp/mvdst.txt\ncat /tmp/mvdst.txt',
+      expected: 'bar' },
+    { name: 'wc',
+      script: "printf 'a\\nb\\nc\\n' > /tmp/wc.txt\nwc /tmp/wc.txt",
+      expected: '3 /tmp/wc.txt' },
+    { name: 'head',
+      script: "printf 'l1\\nl2\\nl3\\nl4\\nl5\\n' > /tmp/hd.txt\nhead -n 3 /tmp/hd.txt",
+      expected: 'l1\nl2\nl3' },
+    { name: 'tail',
+      script: "printf 'l1\\nl2\\nl3\\nl4\\nl5\\n' > /tmp/tl.txt\ntail -n 2 /tmp/tl.txt",
+      expected: 'l4\nl5' },
+    { name: 'grep',
+      script: "printf 'apple\\nbanana\\ncherry\\n' > /tmp/gr.txt\ngrep an /tmp/gr.txt",
+      expected: 'banana' },
+    // ls
+    { name: 'ls-basic',
+      script: 'mkdir -p /tmp/ls1\ntouch /tmp/ls1/a.txt /tmp/ls1/b.txt\nls /tmp/ls1',
+      expected: 'a.txt\nb.txt' },
+    { name: 'ls-hidden',
+      script: 'mkdir -p /tmp/ls2\ntouch /tmp/ls2/.dot /tmp/ls2/vis\nls -a /tmp/ls2',
+      expected: '.dot\nvis' },
+    { name: 'ls-long',
+      script: 'mkdir -p /tmp/ls3\necho hi > /tmp/ls3/f.txt\nls -l /tmp/ls3',
+      expected_contains: 'f.txt' },
+    { name: 'ls-recursive',
+      script: 'mkdir -p /tmp/ls4/sub\ntouch /tmp/ls4/a.txt /tmp/ls4/sub/b.txt\nls -R /tmp/ls4',
+      expected_contains: 'sub/b.txt' },
+    // globs
+    { name: 'glob',
+      script: 'mkdir -p /tmp/gl\ntouch /tmp/gl/a.txt /tmp/gl/b.log\necho /tmp/gl/*.txt',
+      expected: '/tmp/gl/a.txt' },
+    { name: 'recursive-glob',
+      script: 'mkdir -p /tmp/rg/sub\ntouch /tmp/rg/a.sh /tmp/rg/sub/b.sh\necho /tmp/rg/**/*.sh',
+      expected: '/tmp/rg/a.sh /tmp/rg/sub/b.sh' },
+    // modules
+    { name: 'datetime',
+      script: 'zmodload zsh/datetime\necho $((EPOCHSECONDS > 0))',
+      expected: '1' },
+];
+
+const tbody = document.getElementById('results');
+const summary = document.getElementById('summary');
+let passed = 0, failed = 0;
+
+function addRow(name) {
+    const tr = document.createElement('tr');
+    tr.id = 'row-' + name;
+    tr.innerHTML = `
+        <td class="test-name">${name}</td>
+        <td><span class="status-run" data-test-status="running">running</span></td>
+        <td></td>`;
+    tbody.appendChild(tr);
+    return tr;
+}
+
+function updateRow(tr, pass, actual, expectedStr) {
+    const statusEl = tr.querySelector('[data-test-status]');
+    statusEl.className = pass ? 'status-pass' : 'status-fail';
+    statusEl.textContent = pass ? 'pass' : 'FAIL';
+    statusEl.setAttribute('data-test-status', pass ? 'pass' : 'fail');
+    if (!pass) {
+        tr.cells[2].innerHTML =
+            `<pre class="detail">expected: ${esc(expectedStr)}\n  actual: ${esc(actual)}</pre>`;
+    }
+}
+
+function esc(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function updateSummary() {
+    const total = passed + failed;
+    summary.textContent = `${passed} / ${total} passed${failed ? ` — ${failed} FAILED` : ''}`;
+    summary.className = failed ? 'has-fail' : (total === tests.length ? 'all-pass' : '');
+}
+
+summary.textContent = `Running 0 / ${tests.length}…`;
+
+for (const t of tests) {
+    const tr = addRow(t.name);
+    let result;
+    try {
+        result = await runZshScript(t.script);
+    } catch(e) {
+        result = { stdout: '', stderr: String(e) };
+    }
+    const actual = result.stdout.trim();
+    let pass, expectedStr;
+    if (t.expected !== undefined) {
+        expectedStr = t.expected;
+        pass = actual === t.expected.trim();
+    } else {
+        expectedStr = `contains: ${t.expected_contains}`;
+        pass = actual.includes(t.expected_contains);
+    }
+    pass ? passed++ : failed++;
+    updateRow(tr, pass, actual, expectedStr);
+    updateSummary();
+}
+
+document.body.setAttribute('data-tests-complete', '');
+</script>
+</body>
+</html>
