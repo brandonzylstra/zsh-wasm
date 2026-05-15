@@ -131,19 +131,31 @@ sed -i '' -E \
   config.modules
 ```
 
-#### 5b. Enable zsh/files and zsh/stat
+#### 5b. Enable zsh/files, zsh/stat, and zsh/regex
 
 `zsh/files` provides file-operation builtins (`zf_mkdir`, `zf_rm`, etc.) that work
 without forking. `zsh/stat` provides `zstat` for reading file metadata.
+`zsh/regex` enables `[[ str =~ pat ]]` and powers the `grep` shim.
 
 ```
 sed -i '' -E \
-  -e 's/^(name=zsh\/(files|stat) .*)link=no/\1link=static/' \
-  -e 's/^(name=zsh\/(files|stat) .*)load=no/\1load=yes/' \
+  -e 's/^(name=zsh\/(files|stat|regex) .*)link=no/\1link=static/' \
+  -e 's/^(name=zsh\/(files|stat|regex) .*)load=no/\1load=yes/' \
   config.modules
 ```
 
-#### 5c. Regenerate Makefiles
+#### 5c. (Optional) Register zsh/sed for --with-sed builds
+
+If you want to be able to build with `--with-sed` later, add the entry now
+(disabled by default — `bin/build --with-sed` flips it to `link=static`):
+
+```
+sed -i '' '/^name=zsh\/net\/socket /a\
+name=zsh/sed modfile=Src/Modules/sed.mdd link=no auto=yes load=no' \
+  config.modules
+```
+
+#### 5d. Regenerate Makefiles
 
 ```
 emmake make prep
@@ -166,6 +178,41 @@ emmake make \
     -sEXPORT_NAME=createZshModule \
     -lidbfs.js"
 ```
+
+To build with sed included, compile the sed objects separately and add them at link time:
+
+```
+# Compile sed-src/ objects
+SED_SRC="$(pwd)/../sed-src"
+SED_BUILD="$(pwd)/../build-sed"
+mkdir -p "$SED_BUILD"
+for src in sed_embed main compile misc process; do
+  emcc -Os -c "$SED_SRC/${src}.c" -o "$SED_BUILD/sed_${src}.o" -I"$SED_SRC"
+done
+emcc -Os -c "$SED_SRC/sed_mod.c" -o "$SED_BUILD/sed_mod.o" \
+  -I. -I../Src -I"$(pwd)/../../zsh-5.9/Src" \
+  -I"$(pwd)/../../zsh-5.9/Src/Modules" -I"$SED_SRC" -DHAVE_CONFIG_H
+
+# Enable zsh/sed in config.modules, then build
+sed -i '' -E \
+  -e 's/^(name=zsh\/sed .*)link=no/\1link=static/' \
+  -e 's/^(name=zsh\/sed .*)load=no/\1load=yes/' \
+  ../config.modules
+
+emmake make \
+  CFLAGS="-Os -I$SED_SRC" \
+  LDFLAGS="-L$(pwd)/../ncurses-stub/lib \
+    -sFORCE_FILESYSTEM=1 \
+    -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
+    -sMODULARIZE=1 \
+    -sEXPORT_NAME=createZshModule \
+    -lidbfs.js \
+    $SED_BUILD/sed_mod.o \
+    $SED_BUILD/sed_embed.o $SED_BUILD/sed_main.o \
+    $SED_BUILD/sed_compile.o $SED_BUILD/sed_misc.o $SED_BUILD/sed_process.o"
+```
+
+In practice, `bin/build --with-sed` handles all of the above automatically.
 
 ### 7. Deploy to web
 
@@ -234,16 +281,19 @@ bin/setup
 bin/build
 ```
 
-`bin/build` accepts two optional flags:
+`bin/build` accepts optional flags:
 
 ```
-bin/build [--debug] [--out DIR]
+bin/build [--debug] [--out DIR] [--with-sed]
 
   --debug      Compile with -O0 -g instead of -Os, and link with
                -sASSERTIONS=1 -gsource-map. Produces a larger build with
                readable stack traces in browser devtools. Never ship this.
   --out DIR    Deploy zsh.js and zsh.wasm to DIR instead of web/
                (useful when building for an npm package or other output target)
+  --with-sed   Compile OpenBSD sed into the wasm binary as a `sed` builtin
+               (~24 KB increase, 916 KB total vs 892 KB slim build).
+               Requires sed-src/ in the project root (included in this repo).
 ```
 
 JS modules
@@ -336,6 +386,12 @@ most common ones:
 
 `mkdir` and `rm` work natively — Emscripten supports those syscalls directly without forking.
 
+When built with `bin/build --with-sed`, a full `sed` builtin is also available:
+
+| Command | Source    | Notes |
+|---------|-----------|-------|
+| `sed`   | OpenBSD sed compiled into wasm | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. Use file args; stdin pipes don't work with C builtins in the wasm runtime. |
+
 Known Limitations
 -----------------
 
@@ -346,6 +402,7 @@ Known Limitations
 - **No ZLE** — the interactive line editor and completion system are excluded from
   the build (they require a real terminal and add ~350KB to the binary).
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
+- **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
 - **`date` has no timezone** — outputs UTC regardless of system locale.
 - **stdin is always newline-terminated** — if the string passed as `stdin` does
   not end with `\n`, one is appended before feeding it to the wasm process. This
