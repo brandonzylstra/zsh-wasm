@@ -229,6 +229,53 @@ const tests = [
     { name: 'regex-no-match',
       script: '[[ hello =~ xyz ]] && echo yes || echo no',
       expected: 'no' },
+    // control flow (extended)
+    { name: 'while-loop',
+      script: 'i=1; while (( i <= 3 )); do echo $i; (( i++ )); done',
+      expected: '1\n2\n3' },
+    { name: 'case-stmt',
+      script: 'x=hello; case $x in hello) echo yes ;; *) echo no ;; esac',
+      expected: 'yes' },
+    { name: 'command-subst',
+      script: 'result=$(echo hello); echo $result',
+      expected: 'hello',
+      knownFail: true },
+    // head/tail defaults
+    { name: 'head-default',
+      script: "printf 'l1\\nl2\\nl3\\nl4\\nl5\\nl6\\nl7\\nl8\\nl9\\nl10\\nl11\\nl12\\n' > /tmp/hddef.txt\nhead /tmp/hddef.txt",
+      expected: 'l1\nl2\nl3\nl4\nl5\nl6\nl7\nl8\nl9\nl10' },
+    { name: 'tail-default',
+      script: "printf 'l1\\nl2\\nl3\\nl4\\nl5\\nl6\\nl7\\nl8\\nl9\\nl10\\nl11\\nl12\\n' > /tmp/tldef.txt\ntail /tmp/tldef.txt",
+      expected: 'l3\nl4\nl5\nl6\nl7\nl8\nl9\nl10\nl11\nl12' },
+    // grep regex quantifiers
+    { name: 'grep-plus',
+      script: "printf 'a\\naa\\naaa\\nb\\n' > /tmp/grplus.txt\ngrep 'a+' /tmp/grplus.txt",
+      expected: 'a\naa\naaa' },
+    { name: 'grep-optional',
+      script: "printf 'ct\\ncat\\ncaat\\n' > /tmp/gropt.txt\ngrep 'ca?t' /tmp/gropt.txt",
+      expected: 'ct\ncat' },
+    { name: 'grep-braces',
+      script: "printf 'cat\\ncaat\\ncaaat\\n' > /tmp/grbrk.txt\ngrep 'ca{2}t' /tmp/grbrk.txt",
+      expected: 'caat' },
+    // grep multiple files
+    { name: 'grep-multifile',
+      script: "printf 'hello\\n' > /tmp/gmf1.txt\nprintf 'world\\n' > /tmp/gmf2.txt\ngrep 'o' /tmp/gmf1.txt /tmp/gmf2.txt",
+      expected: 'hello\nworld' },
+    // sort combined flags
+    { name: 'sort-rn',
+      script: "printf '10\\n9\\n2\\n100\\n' > /tmp/srn.txt\nsort -rn /tmp/srn.txt",
+      expected: '100\n10\n9\n2' },
+    // cut open-ended ranges
+    { name: 'cut-open-end',
+      script: "printf 'a:b:c:d\\n1:2:3:4\\n' > /tmp/ctoe.txt\ncut -d: -f3- /tmp/ctoe.txt",
+      expected: 'c:d\n3:4' },
+    { name: 'cut-open-start',
+      script: "printf 'a:b:c:d\\n1:2:3:4\\n' > /tmp/ctos.txt\ncut -d: -f-2 /tmp/ctos.txt",
+      expected: 'a:b\n1:2' },
+    // wc multiple files
+    { name: 'wc-multifile',
+      script: "printf 'a\\nb\\n' > /tmp/wm1.txt\nprintf 'x\\ny\\nz\\n' > /tmp/wm2.txt\nwc -l /tmp/wm1.txt /tmp/wm2.txt",
+      expected: '2 /tmp/wm1.txt\n3 /tmp/wm2.txt' },
 ];
 
 const tbody = document.getElementById('results');

@@ -54,14 +54,16 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 51 test cases and compares actual vs. expected output:
+`web/test.html` runs 64 test cases and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
-Covers: shell builtins, all shims (touch, cat, cp, mv, wc, head, tail, grep, ls,
-sort, uniq, cut, tr, date), glob patterns, recursive globs, module loading
-(`zsh/datetime`), stdin, exit codes, and POSIX regex (`=~`, grep anchors,
-alternation, character classes).
+Covers: shell builtins (echo, printf, if, for, while, case, function), all shims
+(touch, cat, cp, mv, wc, head, tail, grep, ls, sort, uniq, cut, tr, date), glob
+patterns, recursive globs, module loading (`zsh/datetime`), stdin, exit codes,
+POSIX regex (`=~`, grep anchors, alternation, character classes, `+`, `?`, `{n}`
+quantifiers), grep across multiple files, sort combined flags (`-rn`), cut
+open-ended field ranges (`-f3-`, `-f-2`), and wc across multiple files.
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
