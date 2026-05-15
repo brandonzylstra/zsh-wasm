@@ -152,6 +152,31 @@ python3 -m http.server
 # open http://localhost:8000/
 ```
 
+Testing
+-------
+
+### Manual
+
+Open `web/test.html` via an HTTP server to run the test suite visually:
+
+```
+cd web
+python3 -m http.server 8765
+# open http://localhost:8765/test.html
+```
+
+### Automated (Playwright)
+
+```
+npm install
+npx playwright install chromium
+npx playwright test
+```
+
+The Playwright config starts a local HTTP server automatically, loads `test.html`,
+and waits for the sentinel attribute `[data-tests-complete]` before checking for
+any `[data-test-status="fail"]` elements.
+
 Scripts
 -------
 
@@ -171,6 +196,17 @@ After downloading `zsh-5.9/` (step 1), the full workflow is just:
 bin/setup
 bin/build
 ```
+
+JS modules
+----------
+
+`zsh.js` and `zsh.wasm` are the compiled wasm artifacts. Two JS modules support them:
+
+- **`zsh-runtime.js`** — core runner, no DOM dependencies. Exports `runZshScript(src)`
+  which returns `{ stdout, stderr }` as strings. Also exports `ansiToHtml`,
+  `BUILTINS_PREAMBLE`, and the `ZSH_FS` / `IDBFS_MOUNT` constants.
+- **`zsh-loader.js`** — DOM layer. Imports from `zsh-runtime.js`, adds CodeMirror
+  editors, Run/Copy buttons, and handles `<script type="text/zsh">` auto-run tags.
 
 Using in HTML
 -------------

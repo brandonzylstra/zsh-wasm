@@ -46,14 +46,14 @@ Loader change only — no wasm binary change.
 
 ---
 
-### Automated tests (Playwright)
+### Automated tests (Playwright) ✓ done
 
-A dedicated test HTML page (`web/test.html`) that runs a suite of zsh scripts
-and compares actual vs. expected output. Can be:
-- Run manually by opening the page in a browser
-- Run automatically via [Playwright](https://playwright.dev/) in CI
+`web/test.html` runs 22 test cases and compares actual vs. expected output:
+- Open manually in a browser (via HTTP server)
+- Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
-Covers: builtin shims, IDBFS persistence, ANSI rendering, glob patterns, etc.
+Covers: shell builtins, all shims (touch, cat, cp, mv, wc, head, tail, grep, ls),
+glob patterns, recursive globs, and module loading (`zsh/datetime`).
 
 ---
 
