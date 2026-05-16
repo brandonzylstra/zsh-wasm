@@ -221,6 +221,27 @@ esac' \
         config.modules.sh
     echo "    config.modules.sh: added zsh/sed entry"
 fi
+# Register zsh/awk (disabled by default; enabled at build time with --with-awk).
+if grep -q '^name=zsh/awk ' config.modules; then
+    echo "    config.modules: zsh/awk already present"
+else
+    sed -i '' '/^name=zsh\/net\/socket /a\
+name=zsh/awk modfile=Src/Modules/awk.mdd link=no auto=yes load=no' \
+        config.modules
+    echo "    config.modules: added zsh/awk (disabled by default)"
+fi
+# Patch config.modules.sh so the zsh/awk entry survives a manual config.status run.
+if grep -q 'zsh/awk' config.modules.sh; then
+    echo "    config.modules.sh: zsh/awk already present"
+else
+    sed -i '' '/\*" zsh\/stat "\*) grep/i\
+case "$userlist" in\
+  *" zsh\/awk "*) grep "^name=zsh\/awk " ${CONFIG_MODULES}.old;;\
+  *) echo "name=zsh\/awk modfile=Src\/Modules\/awk.mdd link=no auto=yes load=no";;\
+esac' \
+        config.modules.sh
+    echo "    config.modules.sh: added zsh/awk entry"
+fi
 echo "    config.modules: done"
 
 echo ""

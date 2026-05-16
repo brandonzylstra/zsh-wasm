@@ -1,0 +1,7 @@
+name=zsh/awk
+link=dynamic
+load=no
+
+autofeatures="b:awk"
+
+objects=""

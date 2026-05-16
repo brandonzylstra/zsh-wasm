@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rebuilds zsh.wasm from the configured build-zsh/ tree and deploys it.
 #
-# Usage: bin/build [--debug] [--out DIR] [--with-sed]
+# Usage: bin/build [--debug] [--out DIR] [--with-sed] [--with-awk]
 #
 #   --debug      Compile with -O0 -g instead of -Os, and link with
 #                -sASSERTIONS=1 -gsource-map. Produces a larger build with
@@ -10,6 +10,8 @@
 #                (useful when building for an npm package or other output target)
 #   --with-sed   Compile OpenBSD sed into the wasm binary as a `sed` builtin
 #                (~50–100 KB increase). Requires sed-src/ in the project root.
+#   --with-awk   Compile one-true-awk into the wasm binary as an `awk` builtin
+#                (~150–200 KB increase). Requires awk-src/ in the project root.
 #
 # Prerequisites (one-time setup — see README):
 #   1. zsh-5.9/ source directory
@@ -28,11 +30,13 @@ ORIG_DIR="$(pwd)"
 DEBUG=0
 OUT_DIR="$ROOT/web"
 WITH_SED=0
+WITH_AWK=0
 
 while (( $# )); do
     case $1 in
         --debug)    DEBUG=1 ;;
         --with-sed) WITH_SED=1 ;;
+        --with-awk) WITH_AWK=1 ;;
         --out)      shift; OUT_DIR=$1 ;;
         --out=*)    OUT_DIR=${1#--out=} ;;
         *)          echo "Unknown option: $1" >&2; exit 1 ;;
@@ -69,6 +73,8 @@ sed -i '' -E \
     -e 's/^(name=zsh\/(files|stat|regex) .*)load=no/\1load=yes/' \
     -e 's/^(name=zsh\/sed .*)link=static/\1link=no/' \
     -e 's/^(name=zsh\/sed .*)load=yes/\1load=no/' \
+    -e 's/^(name=zsh\/awk .*)link=static/\1link=no/' \
+    -e 's/^(name=zsh\/awk .*)load=yes/\1load=no/' \
     config.modules
 
 # Compile and enable zsh/sed if requested.
@@ -197,12 +203,136 @@ MDH
         $SED_BUILD/sed_compile.o $SED_BUILD/sed_misc.o $SED_BUILD/sed_process.o"
 fi
 
+AWK_CFLAGS=""
+AWK_LDFLAGS=""
+AWK_SRC="$ROOT/awk-src"
+AWK_BUILD="$ROOT/build-awk"
+if (( WITH_AWK )); then
+    echo "==> enabling zsh/awk"
+
+    cp "$AWK_SRC/awk.mdd" "$ROOT/zsh-5.9/Src/Modules/awk.mdd"
+
+    if ! grep -q '^name=zsh/awk ' config.modules; then
+        sed -i '' '/^name=zsh\/net\/socket /a\
+name=zsh/awk modfile=Src/Modules/awk.mdd link=no auto=yes load=no' \
+            config.modules
+    fi
+    sed -i '' -E \
+        -e 's/^(name=zsh\/awk .*)link=no/\1link=static/' \
+        -e 's/^(name=zsh\/awk .*)load=no/\1load=yes/' \
+        config.modules
+
+    if [[ ! -f "$BUILD/Src/Modules/awk.epro" ]]; then
+        cat > "$BUILD/Src/Modules/awk.epro" <<'EPRO'
+/* Generated automatically */
+#ifndef have_Src_Modules_awk_globals
+#define have_Src_Modules_awk_globals
+
+extern int setup_ _((UNUSED(Module m)));
+extern int features_ _((Module m,char***features));
+extern int enables_ _((Module m,int**enables));
+extern int boot_ _((UNUSED(Module m)));
+extern int cleanup_ _((Module m));
+extern int finish_ _((UNUSED(Module m)));
+
+#endif /* !have_Src_Modules_awk_globals */
+EPRO
+    fi
+    if [[ ! -f "$BUILD/Src/Modules/awk.mdh" ]]; then
+        cat > "$BUILD/Src/Modules/awk.mdh" <<'MDH'
+#ifndef have_zshQsawk_module
+#define have_zshQsawk_module
+
+# ifndef IMPORTING_MODULE_zshQsawk
+#   define boot_ boot_zshQsawk
+#   define cleanup_ cleanup_zshQsawk
+#   define features_ features_zshQsawk
+#   define enables_ enables_zshQsawk
+#   define setup_ setup_zshQsawk
+#   define finish_ finish_zshQsawk
+# endif /* !IMPORTING_MODULE_zshQsawk */
+
+/* Module dependencies */
+# define IMPORTING_MODULE_zshQsmain 1
+# include "../../Src/zsh.mdh"
+
+# undef mod_import_variable
+# undef mod_import_function
+# if defined(IMPORTING_MODULE_zshQsawk) &&  defined(MODULE)
+#  define mod_import_variable
+#  define mod_import_function
+# else
+#  define mod_import_function
+#  define mod_import_variable
+# endif /* IMPORTING_MODULE_zshQsawk && MODULE */
+# include "awk.epro"
+# undef mod_import_variable
+# define mod_import_variable
+# undef mod_import_variable
+# define mod_import_variable
+# ifndef mod_export
+#  define mod_export
+# endif /* mod_export */
+
+#endif /* !have_zshQsawk_module */
+MDH
+    fi
+
+    mkdir -p "$AWK_BUILD"
+
+    echo "==> compiling awk-src/"
+    AWK_OBJS=(
+        awk_embed awk_main awk_lib awk_run awk_tran
+        awk_parse awk_lex awk_b awk_proctab awk_awkgram
+    )
+    declare -A AWK_FILE=(
+        [awk_embed]="$AWK_SRC/awk_embed.c"
+        [awk_main]="$AWK_SRC/main.c"
+        [awk_lib]="$AWK_SRC/lib.c"
+        [awk_run]="$AWK_SRC/run.c"
+        [awk_tran]="$AWK_SRC/tran.c"
+        [awk_parse]="$AWK_SRC/parse.c"
+        [awk_lex]="$AWK_SRC/lex.c"
+        [awk_b]="$AWK_SRC/b.c"
+        [awk_proctab]="$AWK_SRC/proctab.c"
+        [awk_awkgram]="$AWK_SRC/awkgram.tab.c"
+    )
+    # Rename globals that conflict with zsh or sed symbols at link time.
+    AWK_RENAME="-Dinfile=awk_infile -Dinnew=awk_innew -Dmatch=awk_match -Dlineno=awk_lineno -Derror=awk_error"
+    for name in "${AWK_OBJS[@]}"; do
+        emcc $BUILD_CFLAGS -c "${AWK_FILE[$name]}" \
+            -o "$AWK_BUILD/$name.o" \
+            -I"$AWK_SRC" \
+            $AWK_RENAME \
+            -Wno-implicit-function-declaration \
+            -Wno-unused-result
+    done
+
+    echo "==> compiling zsh/awk module glue"
+    emcc $BUILD_CFLAGS -c "$AWK_SRC/awk_mod.c" \
+        -o "$AWK_BUILD/awk_mod.o" \
+        -I"$BUILD/Src/Modules" \
+        -I"$BUILD/Src" \
+        -I"$ROOT/zsh-5.9/Src" \
+        -I"$ROOT/zsh-5.9/Src/Zle" \
+        -I"$ROOT/zsh-5.9/Src/Modules" \
+        -I"$STUB/include" \
+        -I"$AWK_SRC" \
+        -DHAVE_CONFIG_H
+
+    AWK_CFLAGS="-I$AWK_SRC"
+    AWK_LDFLAGS="$AWK_BUILD/awk_mod.o"
+    for name in "${AWK_OBJS[@]}"; do
+        AWK_LDFLAGS+=" $AWK_BUILD/$name.o"
+    done
+fi
+
 echo "==> patching config.h"
 "$ROOT/bin/patch-config"
 
 echo "==> building"
 emmake make \
-    CFLAGS="$BUILD_CFLAGS $SED_CFLAGS" \
+    CFLAGS="$BUILD_CFLAGS $SED_CFLAGS $AWK_CFLAGS" \
     LDFLAGS="-L$STUB/lib \
         -sFORCE_FILESYSTEM=1 \
         -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
@@ -210,7 +340,8 @@ emmake make \
         -sEXPORT_NAME=createZshModule \
         -lidbfs.js \
         $EXTRA_LDFLAGS \
-        $SED_LDFLAGS"
+        $SED_LDFLAGS \
+        $AWK_LDFLAGS"
 
 echo "==> deploying to $OUT_DIR"
 mkdir -p "$OUT_DIR"

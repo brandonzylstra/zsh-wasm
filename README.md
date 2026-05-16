@@ -255,14 +255,15 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-88 test cases cover: shell builtins (echo, printf, if, for, while, case, function),
+96 test cases cover: shell builtins (echo, printf, if, for, while, case, function),
 all shims, glob patterns, recursive globs, stdin, exit codes, POSIX regex via `=~`
 (anchors, alternation, character classes, `+`/`?`/`{n}` quantifiers), multi-file
 grep and wc, sort combined flags, cut open-ended field ranges, sed (substitution,
-deletion, address ranges, `-n`/`-e`), string operations (length, slice, replace,
-strip-prefix/suffix), brace expansion, array/associative-array operations, append
-redirect, logical operators, `$(...)` command substitution, `$(< file)` file
-substitution, `zf_rm`, and `zstat`.
+deletion, address ranges, `-n`/`-e`), awk (field splitting, pattern matching, gsub,
+NF, NR, BEGIN/END, `-v` variables, `-F` separator, file input), string operations
+(length, slice, replace, strip-prefix/suffix), brace expansion,
+array/associative-array operations, append redirect, logical operators,
+`$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, and `zstat`.
 
 Scripts
 -------
@@ -287,16 +288,18 @@ bin/build
 `bin/build` accepts optional flags:
 
 ```
-bin/build [--debug] [--out DIR] [--with-sed]
+bin/build [--debug] [--out DIR] [--with-sed] [--with-awk]
 
   --debug      Compile with -O0 -g instead of -Os, and link with
                -sASSERTIONS=1 -gsource-map. Produces a larger build with
                readable stack traces in browser devtools. Never ship this.
   --out DIR    Deploy zsh.js and zsh.wasm to DIR instead of web/
                (useful when building for an npm package or other output target)
-  --with-sed   Compile OpenBSD sed into the wasm binary as a `sed` builtin
-               (~24 KB increase, 916 KB total vs 892 KB slim build).
+  --with-sed   Compile OpenBSD sed into the wasm binary as a `sed` builtin.
                Requires sed-src/ in the project root (included in this repo).
+  --with-awk   Compile one-true-awk (BWK awk) into the wasm binary as an `awk`
+               builtin. Requires awk-src/ in the project root (included in
+               this repo). Use --with-sed --with-awk together for the full build.
 ```
 
 JS modules
@@ -389,11 +392,12 @@ most common ones:
 
 `mkdir` and `rm` work natively — Emscripten supports those syscalls directly without forking.
 
-When built with `bin/build --with-sed`, a full `sed` builtin is also available:
+When built with `bin/build --with-sed --with-awk`, compiled-in builtins are also available:
 
-| Command | Source    | Notes |
-|---------|-----------|-------|
-| `sed`   | OpenBSD sed compiled into wasm | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. Use file args; stdin pipes don't work with C builtins in the wasm runtime. |
+| Command | Flag      | Source    | Notes |
+|---------|-----------|-----------|-------|
+| `sed`   | `--with-sed` | OpenBSD sed | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. Use file args; stdin pipes don't work. |
+| `awk`   | `--with-awk` | one-true-awk (BWK) | Full awk: patterns, BEGIN/END, field splitting (`-F`), variables (`-v`), gsub/sub/split, printf. Use file args or `awk 'prog' <<< data`; pipes require fork and don't work. |
 
 Known Limitations
 -----------------
@@ -412,6 +416,7 @@ Known Limitations
   handled by a separate fast path and has no such restrictions.
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
+- **`awk` (--with-awk build) reads only from file args** — same constraint as sed; use `awk 'prog' file` or `awk 'prog' <<< "data"` not `echo data | awk 'prog'`.
 - **`date` has no timezone** — outputs UTC regardless of system locale.
 - **stdin is always newline-terminated** — if the string passed as `stdin` does
   not end with `\n`, one is appended before feeding it to the wasm process. This
