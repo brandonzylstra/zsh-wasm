@@ -61,7 +61,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 207 test cases (206 passing, 1 `knownFail`) and compares actual vs. expected output:
+`web/test.html` runs 212 test cases (211 passing, 1 `knownFail`) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
@@ -80,8 +80,8 @@ ranges, in-place editing, back-references), awk (field splitting, `-F`,
 (`-f`/`-d`/`-e`/`-s`), parameter join with custom separator, string/parameter
 operations, pipe simulation (`a | b | c` rewritten to temp-file chaining),
 subshell simulation (`(cmd)` rewritten to `{ cmd }` at top level),
-`fork: 'off'` no-pipe path, and `createPool`/`shutdownDefaultPool` (including
-parallel execution via `createPool(2)`).
+`fork: 'off'` no-pipe path, `createPool`/`shutdownDefaultPool` (including
+parallel execution via `createPool(2)`), and extended grep (`-r -l -o -e -m`).
 
 Known limitation (1 `knownFail`): subshell variable mutations leak into the
 outer scope because `(cmd)` is rewritten to `{ cmd }` — no true process
