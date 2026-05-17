@@ -669,38 +669,99 @@ printenv() {
 }
 `;
 
-// Runs a zsh script off the main thread via a Web Worker.
-// Returns { stdout, stderr } as plain strings.
-// Detect pipeline operator (not || and not |& or |>).
-// Used to emit a helpful message when a forked pipeline silently produces no output.
+// Detect pipeline operator (space | space, excluding || and |& and |>).
 function hasPipelineOp(src) {
     return / \| /.test(src);
 }
 
-export function runZshScript(src, { stdin = null, fs = null } = {}) {
-    return new Promise((resolve, reject) => {
-        const worker = new Worker(new URL('./zsh-worker.js', import.meta.url));
-        worker.onmessage = ({ data }) => {
-            worker.terminate();
-            let { stdout, stderr, exitCode } = data;
-            // When a pipeline produces no output at all, zsh-wasm silently swallows
-            // the fork() failure. Emit a helpful diagnostic so users know what happened.
-            if (!stdout && !stderr && hasPipelineOp(src)) {
-                stderr = 'zsh-wasm: pipes require fork(), which is not available in WebAssembly.\n' +
-                         '  Use here-strings or heredocs instead of pipelines.\n' +
-                         "  Example: bc <<< '1+1'  (not: echo '1+1' | bc)";
+// Pool of pre-warmed Web Workers. Each worker holds a fully initialized wasm
+// module ready to run a script immediately. After each run the worker begins
+// pre-initializing the next module, overlapping init with the caller's read time.
+class WorkerPool {
+    #ready   = []; // idle workers with a warm module
+    #pending = []; // queued { src, stdin, fs, resolve, reject }
+    #all     = []; // every spawned worker (for shutdown)
+
+    constructor(size = 1) {
+        for (let i = 0; i < size; i++) this.#spawn();
+    }
+
+    #spawn() {
+        const w = new Worker(new URL('./zsh-worker.js', import.meta.url));
+        this.#all.push(w);
+        w.onmessage = ({ data }) => {
+            if (data.type === 'ready') {
+                // Worker finished pre-initializing — dispatch a queued job or park it.
+                if (this.#pending.length > 0) {
+                    this.#dispatch(w, this.#pending.shift());
+                } else {
+                    this.#ready.push(w);
+                }
+            } else if (data.type === 'result') {
+                const job = w._job;
+                w._job = null;
+                let { stdout, stderr, exitCode } = data;
+                if (!stdout && !stderr && hasPipelineOp(job.src)) {
+                    stderr = 'zsh-wasm: pipes require fork(), which is not available in WebAssembly.\n' +
+                             '  Use here-strings or heredocs instead of pipelines.\n' +
+                             "  Example: bc <<< '1+1'  (not: echo '1+1' | bc)";
+                }
+                job.resolve({ stdout, stderr, exitCode });
+                // Worker will send 'ready' once its next pre-init completes.
             }
-            resolve({ stdout, stderr, exitCode });
         };
-        worker.onerror = (e) => {
-            worker.terminate();
-            reject(e);
+        w.onerror = (e) => {
+            const job = w._job;
+            if (job) { job.reject(e); w._job = null; }
         };
+    }
+
+    #dispatch(worker, job) {
+        worker._job = job;
         worker.postMessage({
-            src: BUILTINS_PREAMBLE + src + '\n',
-            fs: fs ?? ZSH_FS,
+            type: 'run',
+            src: BUILTINS_PREAMBLE + job.src + '\n',
+            fs: job.fs ?? ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
-            stdin,
+            stdin: job.stdin ?? null,
         });
-    });
+    }
+
+    run(src, { stdin = null, fs = null } = {}) {
+        return new Promise((resolve, reject) => {
+            const job = { src, stdin, fs, resolve, reject };
+            if (this.#ready.length > 0) {
+                this.#dispatch(this.#ready.shift(), job);
+            } else {
+                this.#pending.push(job);
+            }
+        });
+    }
+
+    shutdown() {
+        for (const w of this.#all) w.terminate();
+        this.#all = [];
+        this.#ready = [];
+        for (const job of this.#pending) job.reject(new Error('WorkerPool shut down'));
+        this.#pending = [];
+    }
+}
+
+// Lazy default pool — created on first runZshScript() call.
+let _defaultPool = null;
+
+export function runZshScript(src, opts = {}) {
+    if (!_defaultPool) _defaultPool = new WorkerPool(1);
+    return _defaultPool.run(src, opts);
+}
+
+/** Create a pool of pre-warmed workers. Call pool.run(src, opts) and pool.shutdown(). */
+export function createPool(size = 1) {
+    return new WorkerPool(size);
+}
+
+/** Terminate the default pool used by runZshScript(). */
+export function shutdownDefaultPool() {
+    _defaultPool?.shutdown();
+    _defaultPool = null;
 }

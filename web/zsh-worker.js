@@ -1,31 +1,55 @@
-// Web Worker that runs a single zsh script and posts results back.
-// Loaded by zsh-runtime.js via new Worker('./zsh-worker.js').
+// Web Worker for zsh-wasm. Pre-initializes a fresh wasm module and signals
+// { type: 'ready' } when ready to run a script. On { type: 'run' }, executes
+// the script and posts { type: 'result' }, then immediately begins initializing
+// the next module — overlapping init with the caller's processing time.
+// Each run gets a fully fresh module instance, so zsh state never leaks between calls.
 
 importScripts('./zsh.js');
 
-self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
-    const outLines = [];
-    const errLines = [];
+let _capture = null;
+let _module  = null;
+let _moduleReady = null; // Promise<module>, resolved when pre-init finishes
 
-    const opts = {
+function startPreInit() {
+    // Fresh capture object — closures below reference this specific instance.
+    const capture = { out: [], err: [], stdinFn: null };
+    _capture = capture;
+    _moduleReady = createZshModule({
         noInitialRun: true,
-        print:    txt => outLines.push(txt),
+        print:    txt => capture.out.push(txt),
         printErr: txt => {
             if (!txt.startsWith('warning: unsupported syscall:') &&
                 !txt.startsWith('program exited (with status:')) {
-                errLines.push(txt);
+                capture.err.push(txt);
             }
         },
-    };
+        stdin: () => capture.stdinFn ? capture.stdinFn() : null,
+    }).then(mod => {
+        _module = mod;
+        self.postMessage({ type: 'ready' });
+        return mod;
+    });
+}
 
+// Begin pre-initializing immediately so the first run arrives to a warm module.
+startPreInit();
+
+self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
+    await _moduleReady;
+    const module  = _module;
+    const capture = _capture;
+
+    // Reset output buffers and stdin for this run.
+    capture.out = [];
+    capture.err = [];
     if (stdin != null) {
-        const text = stdin.endsWith('\n') ? stdin : stdin + '\n';
+        const text  = stdin.endsWith('\n') ? stdin : stdin + '\n';
         const bytes = new TextEncoder().encode(text);
         let pos = 0;
-        opts.stdin = () => pos < bytes.length ? bytes[pos++] : null;
+        capture.stdinFn = () => pos < bytes.length ? bytes[pos++] : null;
+    } else {
+        capture.stdinFn = null;
     }
-
-    const module = await createZshModule(opts);
 
     if (fs === 'idbfs') {
         try { module.FS.mkdir('/home'); } catch(e) {}
@@ -51,5 +75,13 @@ self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
             module.FS.syncfs(false, err => err ? rej(err) : res()));
     }
 
-    self.postMessage({ stdout: outLines.join('\n'), stderr: errLines.join('\n'), exitCode });
+    self.postMessage({
+        type: 'result',
+        stdout: capture.out.join('\n'),
+        stderr: capture.err.join('\n'),
+        exitCode,
+    });
+
+    // Begin pre-initializing the next module while the caller processes this result.
+    startPreInit();
 };

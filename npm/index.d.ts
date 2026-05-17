@@ -16,12 +16,29 @@ export interface ZshResult {
   exitCode: number;
 }
 
+/** A pool of pre-warmed Web Workers. Eliminates cold-start latency for sequential calls. */
+export interface WorkerPool {
+  /** Run a zsh script on the next available worker. */
+  run(src: string, options?: RunOptions): Promise<ZshResult>;
+  /** Terminate all workers and reject any queued calls. */
+  shutdown(): void;
+}
+
 /**
  * Run a zsh script in a Web Worker and return its output.
- * Each call spawns a fresh zsh process; no state is shared between calls
- * unless IDBFS is enabled.
+ * Uses a shared pool of size 1 by default; state never leaks between calls.
  */
 export function runZshScript(src: string, options?: RunOptions): Promise<ZshResult>;
+
+/**
+ * Create a pool of `size` pre-warmed workers (default 1).
+ * Use `pool.run()` instead of `runZshScript()` when you need a dedicated pool
+ * or want to run scripts in parallel.
+ */
+export function createPool(size?: number): WorkerPool;
+
+/** Terminate the default pool used by `runZshScript()`. */
+export function shutdownDefaultPool(): void;
 
 /** Convert ANSI escape sequences to HTML `<span>` elements with inline styles. */
 export function ansiToHtml(text: string): string;

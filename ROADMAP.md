@@ -283,17 +283,19 @@ Feasibility: high. Priority: low until someone asks.
 
 ---
 
-### Worker pooling
+### Worker pooling ✓ done
 
-Currently each `runZshScript()` call spawns a fresh worker, initializes the
-full Emscripten/wasm module, runs the script, and terminates. Cold-start cost
-is ~100–300 ms (wasm load + zsh init). A worker pool would:
+`runZshScript()` now uses a lazy default pool of size 1. Each worker
+pre-initializes a fresh wasm module immediately after completing a run,
+so the next call finds a warm module ready — overlapping init with the
+caller's processing time. State isolation is guaranteed: each run gets
+a fully fresh module instance.
 
-- Keep N workers warm between calls
-- Assign the next script to the first idle worker
-- Re-initialize state between calls (already supported via `sed_full_reset` etc.)
+New exports: `createPool(size?)` for dedicated pools, `shutdownDefaultPool()`
+for cleanup. The pool size defaults to 1 (right for sequential use); pass
+a larger size to `createPool()` for parallel workloads.
 
-Priority: low until latency is reported as a problem. Non-trivial to implement
-correctly (worker lifecycle, error recovery, shutdown).
+Observed speedup in the Playwright test suite: ~18–28 s → ~3–4 s for
+193 sequential tests (warm pool hit on every test after the first).
 
 ---
