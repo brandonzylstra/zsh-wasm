@@ -735,6 +735,25 @@ const tests = [
     { name: 'uniq-stdin-pipe',
       script: "uniq <<< $'a\\na\\nb\\nc\\nc'",
       expected: 'a\nb\nc' },
+    // xargs shim
+    { name: 'xargs-basic',
+      script: "xargs echo <<< 'a b c'",
+      expected: 'a b c' },
+    { name: 'xargs-lines',
+      script: "xargs echo <<< $'foo\\nbar\\nbaz'",
+      expected: 'foo bar baz' },
+    { name: 'xargs-replace',
+      script: "xargs -I{} echo 'item: {}' <<< $'foo\\nbar'",
+      expected: 'item: foo\nitem: bar' },
+    { name: 'xargs-n1',
+      script: "xargs -n1 echo <<< $'a\\nb\\nc'",
+      expected: 'a\nb\nc' },
+    { name: 'xargs-n2',
+      script: "xargs -n2 echo <<< $'a\\nb\\nc\\nd'",
+      expected: 'a b\nc d' },
+    { name: 'xargs-file',
+      script: "printf 'hello\\nworld\\n' > /tmp/xf.txt\nxargs echo < /tmp/xf.txt",
+      expected: 'hello world' },
 ];
 
 const tbody = document.getElementById('results');

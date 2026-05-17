@@ -457,6 +457,50 @@ mktemp() {
   print -- "$result"
 }
 sleep() { : }
+xargs() {
+  local _replace='' _max_args=0 _item _arg _line _stdin _cnt=0
+  local -a _cmd _items _batch _expanded _flat
+  while [[ \${1-} == -* ]]; do
+    case \$1 in
+      -I)  shift; _replace=\$1 ;;
+      -I*) _replace=\${1#-I} ;;
+      -n)  shift; _max_args=\$1 ;;
+      -n*) _max_args=\${1#-n} ;;
+      --) shift; break ;;
+      -*) ;;
+    esac
+    shift
+  done
+  _cmd=("\$@")
+  (( \${#_cmd} == 0 )) && _cmd=(echo)
+  IFS= read -r -d '' _stdin
+  if [[ -n \$_replace ]]; then
+    _items=(\${(f)_stdin})
+    _items=("\${(@)_items:#}")
+    for _item in "\${(@)_items}"; do
+      _expanded=()
+      for _arg in "\${(@)_cmd}"; do
+        _expanded+=("\${_arg//\${_replace}/\${_item}}")
+      done
+      "\${_expanded[@]}"
+    done
+  elif (( _max_args > 0 )); then
+    _flat=()
+    for _line in \${(f)_stdin}; do _flat+=(\${(z)_line}); done
+    _items=("\${(@)_flat:#}")
+    _batch=(); _cnt=0
+    for _item in "\${(@)_items}"; do
+      _batch+=("\$_item")
+      (( ++_cnt >= _max_args )) && { "\${_cmd[@]}" "\${_batch[@]}"; _batch=(); _cnt=0 }
+    done
+    (( \${#_batch} )) && "\${_cmd[@]}" "\${_batch[@]}"
+  else
+    _flat=()
+    for _line in \${(f)_stdin}; do _flat+=(\${(z)_line}); done
+    _items=("\${(@)_flat:#}")
+    (( \${#_items} )) && "\${_cmd[@]}" "\${_items[@]}"
+  fi
+}
 find() {
   local _dir='.' _type='' _name='' _maxdepth='' _newer=''
   local _dir_set=0 _f _d _rel _depth _nm _newer_mtime=0

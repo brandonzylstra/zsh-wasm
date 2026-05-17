@@ -255,7 +255,7 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-179 test cases pass (182 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+185 test cases pass (188 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
@@ -406,6 +406,7 @@ most common ones:
 | `mktemp`  | `-d`, template       | creates temp file or dir; replaces trailing `X`'s with random digits |
 | `sleep`   | —                    | no-op in wasm (synchronous environment); prevents "command not found" |
 | `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
+| `xargs`   | `-I STR`, `-n N`     | reads stdin; default collects all items into one call; `-I` replaces per-line; `-n` batches |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
 

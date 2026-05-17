@@ -429,6 +429,14 @@
     </div>
 
     <div class="example">
+        <div class="example-header">xargs</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-xargs"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-xargs"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
         <div class="example-header">Utilities</div>
         <div class="example-body">
             <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-utils"></pre></div>
@@ -795,6 +803,23 @@ define factorial(n) {
 }
 factorial(15)
 EOF
+</script>
+
+<script type="text/zsh" data-id="xargs" data-stdout="#out-xargs" data-stderr="#out-xargs">
+# All items as args to one command
+xargs echo <<< $'apple\nbanana\ncherry'
+
+# -I{}: run once per line, replacing the placeholder
+xargs -I{} echo 'fruit: {}' <<< $'apple\nbanana\ncherry'
+
+# -n2: run command with at most 2 args at a time
+xargs -n2 echo <<< $'a\nb\nc\nd\ne'
+
+# practical: grep multiple files collected into a list
+printf 'hello world\nfoo bar\n' > /tmp/xf1.txt
+printf 'hello zsh\nbaz qux\n' > /tmp/xf2.txt
+printf '/tmp/xf1.txt\n/tmp/xf2.txt\n' > /tmp/files.txt
+xargs grep 'hello' < /tmp/files.txt
 </script>
 
 <script type="text/zsh" data-id="utils" data-stdout="#out-utils" data-stderr="#out-utils">

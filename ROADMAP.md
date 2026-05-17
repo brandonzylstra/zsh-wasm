@@ -61,7 +61,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 182 test cases (179 passing, 3 `knownFail` documenting known limitations) and compares actual vs. expected output:
+`web/test.html` runs 188 test cases (185 passing, 3 `knownFail` documenting known limitations) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
@@ -224,9 +224,9 @@ real scripts, and implementable without forking.
 
 Candidates:
 - `printf` (already a zsh builtin — no shim needed)
-- `find` — hard to shim completely; `zsh` globbing covers many use cases
-- `xargs` — possible with arrays
-- `tee` — straightforward with `MULTIOS` or a loop
+- `find` ✓ done — zsh glob recursion
+- `xargs` ✓ done — default, `-I STR`, `-n N`
+- `tee` ✓ done
 
 ---
 
