@@ -37,6 +37,7 @@
   .status-fail  { color: #f85149; }
   .status-run   { color: #e3b341; }
   .status-xfail { color: #8b949e; }
+  .status-pend  { color: #484f58; }
   .test-name { color: #79c0ff; }
   pre.detail {
     margin: 0.3rem 0 0;
@@ -47,6 +48,20 @@
     font-size: 0.8rem;
     color: #8b949e;
   }
+  .rerun-btn {
+    background: none;
+    border: 1px solid #30363d;
+    color: #8b949e;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 0.72rem;
+    cursor: pointer;
+    vertical-align: middle;
+    line-height: 1;
+    margin-left: 4px;
+  }
+  .rerun-btn:not(:disabled):hover { color: #79c0ff; border-color: #79c0ff; }
+  .rerun-btn:disabled { opacity: 0.25; cursor: default; }
 </style>
 </head>
 <body>
@@ -77,6 +92,9 @@ const tests = [
     { name: 'string-lower',
       script: 's=HELLO\necho ${s:l}',
       expected: 'hello' },
+    { name: 'string-upper',
+      script: 's=hello\necho ${s:u}',
+      expected: 'HELLO' },
     // control flow
     { name: 'if',
       script: 'if [[ 1 -eq 1 ]]; then echo yes; fi',
@@ -87,6 +105,9 @@ const tests = [
     { name: 'function',
       script: 'greet() { echo "hi $1" }\ngreet world',
       expected: 'hi world' },
+    { name: 'local-var',
+      script: 'f() { local x=inner; echo $x }; x=outer; f; echo $x',
+      expected: 'inner\nouter' },
     // file shims
     { name: 'touch-cat',
       script: 'touch /tmp/tc.txt\necho hello > /tmp/tc.txt\ncat /tmp/tc.txt',
@@ -299,6 +320,14 @@ const tests = [
     { name: 'sed-addr-range',
       script: "printf 'a\\nb\\nc\\nd\\n' > /tmp/sar.txt\nsed '2,3s/.*/X/' /tmp/sar.txt",
       expected: 'a\nX\nX\nd' },
+    // sed: in-place editing
+    { name: 'sed-inplace',
+      script: "echo hello > /tmp/si.txt\nsed -i '' 's/hello/world/' /tmp/si.txt\ncat /tmp/si.txt",
+      expected: 'world' },
+    // sed: print single line by number
+    { name: 'sed-line-print',
+      script: "printf 'a\\nb\\nc\\n' > /tmp/slp.txt\nsed -n '2p' /tmp/slp.txt",
+      expected: 'b' },
     // string operations (parameter expansion — no fork)
     { name: 'string-length',
       script: 's=hello; echo ${#s}',
@@ -315,6 +344,9 @@ const tests = [
     { name: 'string-strip-suffix',
       script: 's=foobar; echo ${s%bar}',
       expected: 'foo' },
+    { name: 'param-default',
+      script: "x=''; echo ${x:-hello}",
+      expected: 'hello' },
     // brace expansion
     { name: 'brace-range',
       script: 'echo {1..5}',
@@ -363,6 +395,17 @@ const tests = [
     { name: 'zstat-size',
       script: "printf 'hello\\n' > /tmp/zst.txt; zstat -H s /tmp/zst.txt; echo $s[size]",
       expected: '6' },
+    // file test operators
+    { name: 'file-test-f',
+      script: "echo x > /tmp/ftf.txt; [[ -f /tmp/ftf.txt ]] && echo yes || echo no",
+      expected: 'yes' },
+    { name: 'file-test-d',
+      script: "mkdir -p /tmp/ftd; [[ -d /tmp/ftd ]] && echo yes || echo no",
+      expected: 'yes' },
+    // exit status capture
+    { name: 'exit-status',
+      script: 'false; echo $?',
+      expected: '1' },
     // awk builtin (file-based — no fork/pipes required)
     { name: 'awk-print',
       script: "echo 'hello world' > /tmp/awk1.txt; awk '{print $2}' /tmp/awk1.txt",
@@ -388,21 +431,41 @@ const tests = [
     { name: 'awk-file',
       script: "printf 'a\\nb\\nc\\n' > /tmp/awk7.txt; awk '{print NR, $0}' /tmp/awk7.txt",
       expected: '1 a\n2 b\n3 c' },
+    { name: 'awk-sub',
+      script: "echo 'aaa' > /tmp/asub.txt; awk '{sub(/a/,\"X\"); print}' /tmp/asub.txt",
+      expected: 'Xaa' },
+    { name: 'awk-length',
+      script: "echo 'hello' > /tmp/alen.txt; awk '{print length($0)}' /tmp/alen.txt",
+      expected: '5' },
+    { name: 'awk-printf-fmt',
+      script: "awk 'BEGIN{printf \"%05d\\n\", 42}'",
+      expected: '00042' },
+    { name: 'awk-fnr',
+      script: "printf 'a\\nb\\n' > /tmp/anf1.txt; printf 'x\\n' > /tmp/anf2.txt; awk 'FNR==1{print FILENAME}' /tmp/anf1.txt /tmp/anf2.txt",
+      expected: '/tmp/anf1.txt\n/tmp/anf2.txt' },
 ];
 
 const tbody = document.getElementById('results');
 const summary = document.getElementById('summary');
 let passed = 0, failed = 0, xfailed = 0;
+let initialPassDone = false;
 
-function addRow(name, knownFail = false) {
+function esc(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function addRow(t) {
+    const kf = !!t.knownFail;
     const tr = document.createElement('tr');
-    tr.id = 'row-' + name;
-    if (knownFail) tr.setAttribute('data-known-fail', '');
+    tr.id = 'row-' + t.name;
+    tr.dataset.status = 'pending';
+    if (kf) tr.setAttribute('data-known-fail', '');
     tr.innerHTML = `
-        <td class="test-name">${name}</td>
-        <td><span class="status-run" data-test-status="running">running</span></td>
+        <td class="test-name">${esc(t.name)}<button class="rerun-btn" disabled title="Re-run this test">↺</button></td>
+        <td><span class="status-pend" data-test-status="pending">—</span></td>
         <td></td>`;
     tbody.appendChild(tr);
+    tr.querySelector('.rerun-btn').addEventListener('click', () => runTest(t, tr));
     return tr;
 }
 
@@ -412,6 +475,7 @@ function updateRow(tr, pass, actual, expectedStr, knownFail = false) {
         statusEl.className = 'status-pass';
         statusEl.textContent = 'pass';
         statusEl.setAttribute('data-test-status', 'pass');
+        tr.cells[2].innerHTML = '';
     } else if (knownFail) {
         statusEl.className = 'status-xfail';
         statusEl.textContent = 'xfail';
@@ -427,30 +491,45 @@ function updateRow(tr, pass, actual, expectedStr, knownFail = false) {
     }
 }
 
-function esc(s) {
-    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 function updateSummary() {
-    const total = passed + failed;
-    let text = `${passed} / ${total} passed`;
-    if (failed) text += ` — ${failed} FAILED`;
-    if (xfailed) text += ` — ${xfailed} expected failure${xfailed > 1 ? 's' : ''}`;
+    const done = passed + failed + xfailed;
+    let text;
+    if (!initialPassDone) {
+        text = `Running ${done} / ${tests.length}…`;
+        summary.className = '';
+    } else {
+        text = `${passed} / ${tests.length} passed`;
+        if (failed) text += ` — ${failed} FAILED`;
+        if (xfailed) text += ` — ${xfailed} expected failure${xfailed > 1 ? 's' : ''}`;
+        summary.className = failed ? 'has-fail' : 'all-pass';
+    }
     summary.textContent = text;
-    summary.className = failed ? 'has-fail' : (passed + xfailed === tests.length ? 'all-pass' : '');
 }
 
-summary.textContent = `Running 0 / ${tests.length}…`;
-
-for (const t of tests) {
+async function runTest(t, tr) {
     const kf = !!t.knownFail;
-    const tr = addRow(t.name, kf);
+    const prev = tr.dataset.status;
+
+    // Adjust counters: remove old result
+    if (prev === 'pass') passed--;
+    else if (prev === 'fail') failed--;
+    else if (prev === 'xfail') xfailed--;
+
+    tr.dataset.status = 'running';
+    const statusEl = tr.querySelector('[data-test-status]');
+    statusEl.className = 'status-run';
+    statusEl.textContent = 'running';
+    statusEl.setAttribute('data-test-status', 'running');
+    tr.cells[2].innerHTML = '';
+    updateSummary();
+
     let result;
     try {
         result = await runZshScript(t.script, { stdin: t.stdin ?? null });
     } catch(e) {
-        result = { stdout: '', stderr: String(e) };
+        result = { stdout: '', stderr: String(e), exitCode: 1 };
     }
+
     const actual = result.stdout.trim();
     let pass, expectedStr;
     if (t.expected !== undefined) {
@@ -466,13 +545,28 @@ for (const t of tests) {
             expectedStr += ` (exit ${t.expectedExitCode})`;
         }
     }
+
+    const newStatus = pass ? 'pass' : (kf ? 'xfail' : 'fail');
+    tr.dataset.status = newStatus;
     if (pass) passed++;
     else if (kf) xfailed++;
     else failed++;
+
     updateRow(tr, pass, actual, expectedStr, kf);
     updateSummary();
 }
 
+// Pre-render all rows, then run sequentially
+summary.textContent = `Running 0 / ${tests.length}…`;
+const rows = tests.map(t => addRow(t));
+
+for (let i = 0; i < tests.length; i++) {
+    await runTest(tests[i], rows[i]);
+    rows[i].querySelector('.rerun-btn').disabled = false;
+}
+
+initialPassDone = true;
+updateSummary();
 document.body.setAttribute('data-tests-complete', '');
 </script>
 </body>

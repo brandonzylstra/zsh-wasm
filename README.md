@@ -255,15 +255,18 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-96 test cases cover: shell builtins (echo, printf, if, for, while, case, function),
-all shims, glob patterns, recursive globs, stdin, exit codes, POSIX regex via `=~`
-(anchors, alternation, character classes, `+`/`?`/`{n}` quantifiers), multi-file
-grep and wc, sort combined flags, cut open-ended field ranges, sed (substitution,
-deletion, address ranges, `-n`/`-e`), awk (field splitting, pattern matching, gsub,
-NF, NR, BEGIN/END, `-v` variables, `-F` separator, file input), string operations
-(length, slice, replace, strip-prefix/suffix), brace expansion,
-array/associative-array operations, append redirect, logical operators,
-`$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, and `zstat`.
+108 test cases cover: shell builtins (echo, printf, if, for, while, case, function,
+`local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
+globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
+classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
+cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`-e`,
+`-i ''` in-place, line-addressed print), awk (field splitting, pattern matching,
+gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
+`-F` separator, multi-file), string operations (length, slice, replace,
+strip-prefix/suffix, `${var:-default}`, upper/lower case), brace expansion,
+array/associative-array operations, file-test operators (`-f`/`-d`), append redirect,
+logical operators, `$(...)` command substitution, `$(< file)` file substitution,
+`zf_rm`, `zstat`, and per-test rerun buttons in the test UI.
 
 Scripts
 -------

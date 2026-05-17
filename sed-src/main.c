@@ -152,7 +152,7 @@ sed_main(int argc, char *argv[])
 
 	fflag = 0;
 	inplace = NULL;
-	while ((c = getopt(argc, argv, "Eae:f:i::nru")) != -1)
+	while ((c = getopt(argc, argv, "Eae:f:i:nru")) != -1)
 		switch (c) {
 		case 'E':
 		case 'r':

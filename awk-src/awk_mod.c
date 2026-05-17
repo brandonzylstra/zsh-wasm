@@ -26,10 +26,14 @@ bin_awk(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
         argv[i + 1] = args[i];
     argv[n + 1] = NULL;
 
-    if (setjmp(awk_exit_jmp))
+    if (setjmp(awk_exit_jmp)) {
+        fflush(stdout);
         return awk_exit_code;
+    }
 
-    return awk_main(n + 1, argv);
+    int ret = awk_main(n + 1, argv);
+    fflush(stdout);
+    return ret;
 }
 
 static struct builtin bintab[] = {
