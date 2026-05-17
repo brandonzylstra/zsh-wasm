@@ -255,18 +255,19 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-108 test cases cover: shell builtins (echo, printf, if, for, while, case, function,
+119 test cases cover: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
 cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`-e`,
 `-i ''` in-place, line-addressed print), awk (field splitting, pattern matching,
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
-`-F` separator, multi-file), string operations (length, slice, replace,
-strip-prefix/suffix, `${var:-default}`, upper/lower case), brace expansion,
-array/associative-array operations, file-test operators (`-f`/`-d`), append redirect,
-logical operators, `$(...)` command substitution, `$(< file)` file substitution,
-`zf_rm`, `zstat`, and per-test rerun buttons in the test UI.
+`-F` separator, multi-file), basename/dirname path manipulation, rm (file deletion,
+`-f`, `-rf` recursive), string operations (length, slice, replace, strip-prefix/suffix,
+`${var:-default}`, upper/lower case), brace expansion, array/associative-array
+operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
+`$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, `zstat`,
+and per-test rerun buttons in the test UI.
 
 Scripts
 -------
@@ -390,10 +391,13 @@ most common ones:
 | `sort`   | `-r` `-n` `-u`       | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)` |
 | `uniq`   | —                    | removes consecutive duplicate lines |
 | `cut`    | `-d DELIM` `-f N`    | field ranges (`1-3`, `2,4`) supported |
-| `tr`     | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |
-| `date`   | `+FORMAT`            | uses `strftime` from `zsh/datetime`; no timezone (outputs UTC) |
+| `tr`      | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |
+| `date`    | `+FORMAT`            | uses `strftime` from `zsh/datetime`; no timezone (outputs UTC) |
+| `basename`| suffix arg           | strips directory and optional suffix (`basename /a/b.txt .txt` → `b`) |
+| `dirname` | —                    | strips last component (`dirname /a/b` → `/a`; `dirname foo` → `.`) |
+| `rm`      | `-f` `-r`/`-rf`      | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
 
-`mkdir` and `rm` work natively — Emscripten supports those syscalls directly without forking.
+`mkdir` works natively — Emscripten supports that syscall directly without forking.
 
 When built with `bin/build --with-sed --with-awk`, compiled-in builtins are also available:
 

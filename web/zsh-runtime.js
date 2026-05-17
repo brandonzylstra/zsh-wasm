@@ -311,6 +311,48 @@ tr() {
   fi
   print -rn -- "$content"
 }
+basename() {
+  local p=$1 s=\${2:-}
+  while [[ \${#p} -gt 1 && $p == */ ]]; do p=\${p%/}; done
+  p=\${p##*/}
+  [[ -z $p ]] && p=/
+  [[ -n $s && $p == *$s ]] && p=\${p%$s}
+  print -- "$p"
+}
+dirname() {
+  local p=$1
+  while [[ \${#p} -gt 1 && $p == */ ]]; do p=\${p%/}; done
+  [[ $p == / ]] && { print /; return }
+  [[ $p != */* ]] && { print .; return }
+  p=\${p%/*}
+  print -- "\${p:-/}"
+}
+rm() {
+  local force=0 recursive=0
+  local -a targets
+  for a; do
+    case $a in
+      -*) [[ $a == *f* ]] && force=1; [[ $a == *[rR]* ]] && recursive=1 ;;
+      *)  targets+=($a) ;;
+    esac
+  done
+  local f p
+  for f in $targets; do
+    if [[ -d $f ]] && (( recursive )); then
+      local -a rfiles rdirs
+      rfiles=($f/**/*(ND.))
+      rdirs=($f/**/*(ND/))
+      for p in $rfiles; do zf_rm -- $p 2>/dev/null || true; done
+      for p in \${(Oa)rdirs} $f; do zf_rmdir -- $p 2>/dev/null || true; done
+    elif [[ -d $f ]]; then
+      (( force )) || { print -u2 "rm: $f: is a directory"; return 1 }
+    elif (( force )); then
+      zf_rm -- $f 2>/dev/null || true
+    else
+      zf_rm -- $f
+    fi
+  done
+}
 `;
 
 // Runs a zsh script off the main thread via a Web Worker.

@@ -24,17 +24,20 @@ Zero impact on wasm binary size — loader change only.
 
 ---
 
-### Additional shims: sort, uniq, cut, tr, date ✓ done
+### Additional shims: sort, uniq, cut, tr, date, basename, dirname, rm ✓ done
 
 Implemented as pure zsh functions in `BUILTINS_PREAMBLE`. No Web Workers needed.
 
-| Shim   | Approach |
-|--------|----------|
-| `date` | `strftime` from `zsh/datetime`; `+FORMAT` arg supported |
-| `sort` | `${(o)}` / `${(O)}` / `${(on)}` array flags for alpha/reverse/numeric sort |
-| `uniq` | consecutive-duplicate removal with loop |
-| `cut`  | `\x01` as internal separator; field ranges (`1-3`, `2,4`) supported |
-| `tr`   | `${(U)}`/`${(L)}` for `a-z`↔`A-Z`; char-by-char loop for arbitrary mappings |
+| Shim       | Approach |
+|------------|----------|
+| `date`     | `strftime` from `zsh/datetime`; `+FORMAT` arg supported |
+| `sort`     | `${(o)}` / `${(O)}` / `${(on)}` array flags for alpha/reverse/numeric sort |
+| `uniq`     | consecutive-duplicate removal with loop |
+| `cut`      | `\x01` as internal separator; field ranges (`1-3`, `2,4`) supported |
+| `tr`       | `${(U)}`/`${(L)}` for `a-z`↔`A-Z`; char-by-char loop for arbitrary mappings |
+| `basename` | parameter expansion (`##*/`, `%suffix`) |
+| `dirname`  | parameter expansion (`%/*`), handles root and relative paths |
+| `rm`       | delegates to `zf_rm`/`zf_rmdir` (from `zsh/files`); supports `-f`, `-r`, `-rf` |
 
 ---
 
@@ -54,17 +57,20 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 70 test cases and compares actual vs. expected output:
+`web/test.html` runs 119 test cases and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
 Covers: shell builtins (echo, printf, if, for, while, case, function), all shims
-(touch, cat, cp, mv, wc, head, tail, grep, ls, sort, uniq, cut, tr, date), glob
-patterns, recursive globs, module loading (`zsh/datetime`), stdin, exit codes,
-POSIX regex (`=~`, grep anchors, alternation, character classes, `+`, `?`, `{n}`
-quantifiers), grep across multiple files, sort combined flags (`-rn`), cut
-open-ended field ranges (`-f3-`, `-f-2`), wc across multiple files, and sed
-(substitution, global replace, deletion, `-n`/`-e`, address ranges).
+(touch, cat, cp, mv, wc, head, tail, grep, ls, sort, uniq, cut, tr, date,
+basename, dirname, rm), glob patterns, recursive globs, module loading
+(`zsh/datetime`), stdin, exit codes, POSIX regex (`=~`, grep anchors,
+alternation, character classes, `+`, `?`, `{n}` quantifiers), grep across
+multiple files, sort combined flags (`-rn`), cut open-ended field ranges
+(`-f3-`, `-f-2`), wc across multiple files, sed (substitution, global replace,
+deletion, `-n`/`-e`, address ranges, in-place editing), awk (field splitting,
+`-F`, `NR`/`NF`/`FNR`, `sub`/`gsub`, `length`, `printf`, user variables), and
+string/parameter operations (`${#s}`, `${s:n:m}`, defaults, local scope).
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
@@ -148,14 +154,112 @@ use the same optional-builtin pattern.
 
 ---
 
-### awk
+### awk ✓ done
 
-**Zsh shim** covers `awk '{print $N}'`, `-F sep`, `NR`/`NF`, simple
-`BEGIN`/`END` — but anything with user-defined functions, arrays, or complex
-pattern-action pairs requires near-complete reimplementation. Shim ceiling is
-low.
+One-true-awk (BWK awk, Lucent license) compiled into the wasm binary as a zsh
+builtin via `bin/build --with-awk`. Supports user-defined functions, arrays,
+`sub`/`gsub`, `printf`, `NR`/`NF`/`FNR`, multiple input files, `-F sep`, `-v`.
 
-**Compiled wasm** is the better long-term answer. mawk is ~5 KLOC of portable
-C, compiles cleanly, and produces a ~250 KB wasm module. Same JS interception
-architecture as sed above. Deferred until the multi-module wasm loading
-pattern is established (likely alongside or after sed).
+Same embedding pattern as sed: `exit()` replaced by `longjmp`-based wrapper,
+all global state reset between calls, registered as a zsh builtin in
+`awk-src/awk_mod.c`.
+
+---
+
+## Planned
+
+### Shim architecture decision
+
+`BUILTINS_PREAMBLE` is exported as a string constant — it is prepended to every
+script by `runZshScript()` automatically. Users who construct scripts that
+already define their own `basename`, `rm`, etc. may want to skip the preamble or
+override individual shims. Options to decide:
+
+- **Status quo**: always prepend preamble (current behavior; simple)
+- **Opt-out**: `runZshScript(src, { preamble: false })`
+- **Selective override**: export preamble as a mutable dict, let users delete keys
+
+Decision deferred until someone reports a concrete conflict.
+
+---
+
+### Remaining shim gaps
+
+Common Unix utilities not yet shimmed. The bar is: used frequently enough in
+real scripts, and implementable without forking.
+
+Candidates:
+- `printf` (already a zsh builtin — no shim needed)
+- `find` — hard to shim completely; `zsh` globbing covers many use cases
+- `xargs` — possible with arrays
+- `tee` — straightforward with `MULTIOS` or a loop
+
+---
+
+### TypeScript types (planned, pre-npm-publish)
+
+`npm/index.d.ts` already declares the public API. Needs review:
+- Is `RunOptions.fs` well-documented enough?
+- Should `BUILTINS_PREAMBLE` type be `string` or a structured type?
+- Add JSDoc comments to the `.d.ts` before publishing.
+
+---
+
+### npm publish prerequisites
+
+Before publishing `zsh-wasm` to the npm registry:
+
+1. All TypeScript types reviewed and documented
+2. Shim gaps assessed — at minimum, document which POSIX utilities are and
+   are not available
+3. README updated with a quick-start example and known limitations
+4. Version policy decided (currently `0.x`; no stability guarantee until `1.0`)
+5. Wasm delivery strategy confirmed (bundle vs. CDN vs. npm asset)
+
+---
+
+## Open questions / possible
+
+### Wasm delivery strategy
+
+Currently the npm package ships four files: `zsh-runtime.js`, `zsh-worker.js`,
+`zsh.js`, `zsh.wasm`. The `.wasm` file is ~900 KB uncompressed. Options:
+
+- **Bundle as npm asset** (current): works everywhere, no CDN dependency,
+  but increases npm install size for everyone
+- **CDN reference**: runtime fetches wasm from a CDN URL; smaller npm package,
+  but adds network dependency
+- **User-supplied wasm**: ship runtime + worker, let users provide the `.wasm`
+  path (maximum flexibility, worse DX)
+
+Decision affects API surface (`runZshScript` options) and should be made before
+`1.0`.
+
+---
+
+### Node.js support
+
+Currently targets browsers only (Web Workers, `import.meta.url`). Node.js would
+require:
+- Replace `Worker` with `worker_threads`
+- Replace `import.meta.url` with `__dirname` or `import.meta.url` (ESM)
+- Test with Node 18+
+
+Feasibility: high. Priority: low until someone asks.
+
+---
+
+### Worker pooling
+
+Currently each `runZshScript()` call spawns a fresh worker, initializes the
+full Emscripten/wasm module, runs the script, and terminates. Cold-start cost
+is ~100–300 ms (wasm load + zsh init). A worker pool would:
+
+- Keep N workers warm between calls
+- Assign the next script to the first idle worker
+- Re-initialize state between calls (already supported via `sed_full_reset` etc.)
+
+Priority: low until latency is reported as a problem. Non-trivial to implement
+correctly (worker lifecycle, error recovery, shutdown).
+
+---
