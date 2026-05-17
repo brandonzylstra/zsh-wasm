@@ -62,6 +62,22 @@
   }
   .rerun-btn:not(:disabled):hover { color: #79c0ff; border-color: #79c0ff; }
   .rerun-btn:disabled { opacity: 0.25; cursor: default; }
+  .test-name { cursor: pointer; user-select: none; }
+  .expand-chevron { display: inline-block; font-size: 0.65rem; width: 1em; opacity: 0.4; margin-right: 2px; }
+  tr.expandable:hover td { background: #111820; }
+  tr.detail-row td { padding: 0 0.8rem 0.6rem 2rem; border-bottom: 1px solid #21262d; }
+  tr.detail-row:last-child td { border-bottom: none; }
+  pre.script-code {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    background: #0d1117;
+    border-left: 2px solid #30363d;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+    font-size: 0.8rem;
+    color: #e3b341;
+  }
+  pre.script-code .stdin-label { color: #8b949e; font-style: italic; }
 </style>
 </head>
 <body>
@@ -458,13 +474,33 @@ function addRow(t) {
     const kf = !!t.knownFail;
     const tr = document.createElement('tr');
     tr.id = 'row-' + t.name;
+    tr.className = 'expandable';
     tr.dataset.status = 'pending';
     if (kf) tr.setAttribute('data-known-fail', '');
     tr.innerHTML = `
-        <td class="test-name">${esc(t.name)}<button class="rerun-btn" disabled title="Re-run this test">↺</button></td>
+        <td class="test-name"><span class="expand-chevron">▶</span>${esc(t.name)}<button class="rerun-btn" disabled title="Re-run this test">↺</button></td>
         <td><span class="status-pend" data-test-status="pending">—</span></td>
         <td></td>`;
+
+    // Detail row (hidden until expanded)
+    const detailTr = document.createElement('tr');
+    detailTr.className = 'detail-row';
+    detailTr.style.display = 'none';
+    detailTr.innerHTML = `<td colspan="3"><pre class="script-code">${esc(t.script)}${
+        t.stdin != null ? `\n<span class="stdin-label"># stdin: ${esc(t.stdin)}</span>` : ''
+    }</pre></td>`;
+
     tbody.appendChild(tr);
+    tbody.appendChild(detailTr);
+
+    // Click name cell to toggle script view (ignore clicks on the rerun button)
+    tr.querySelector('.test-name').addEventListener('click', e => {
+        if (e.target.closest('.rerun-btn')) return;
+        const open = detailTr.style.display !== 'none';
+        detailTr.style.display = open ? 'none' : 'table-row';
+        tr.querySelector('.expand-chevron').textContent = open ? '▶' : '▼';
+    });
+
     tr.querySelector('.rerun-btn').addEventListener('click', () => runTest(t, tr));
     return tr;
 }
