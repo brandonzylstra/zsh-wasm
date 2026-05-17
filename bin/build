@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Rebuilds zsh.wasm from the configured build-zsh/ tree and deploys it.
 #
-# Usage: bin/build [--debug] [--out DIR] [--with-sed] [--with-awk]
+# Usage: bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
 #
 #   --debug      Compile with -O0 -g instead of -Os, and link with
 #                -sASSERTIONS=1 -gsource-map. Produces a larger build with
@@ -12,6 +12,8 @@
 #                (~50–100 KB increase). Requires sed-src/ in the project root.
 #   --with-awk   Compile one-true-awk into the wasm binary as an `awk` builtin
 #                (~150–200 KB increase). Requires awk-src/ in the project root.
+#   --with-bc    Compile Gavin Howard bc into the wasm binary as a `bc` builtin
+#                (~60–100 KB increase). Requires bc-src/ in the project root.
 #
 # Prerequisites (one-time setup — see README):
 #   1. zsh-5.9/ source directory
@@ -31,12 +33,14 @@ DEBUG=0
 OUT_DIR="$ROOT/web"
 WITH_SED=0
 WITH_AWK=0
+WITH_BC=0
 
 while (( $# )); do
     case $1 in
         --debug)    DEBUG=1 ;;
         --with-sed) WITH_SED=1 ;;
         --with-awk) WITH_AWK=1 ;;
+        --with-bc)  WITH_BC=1 ;;
         --out)      shift; OUT_DIR=$1 ;;
         --out=*)    OUT_DIR=${1#--out=} ;;
         *)          echo "Unknown option: $1" >&2; exit 1 ;;
@@ -75,6 +79,8 @@ sed -i '' -E \
     -e 's/^(name=zsh\/sed .*)load=yes/\1load=no/' \
     -e 's/^(name=zsh\/awk .*)link=static/\1link=no/' \
     -e 's/^(name=zsh\/awk .*)load=yes/\1load=no/' \
+    -e 's/^(name=zsh\/bc .*)link=static/\1link=no/' \
+    -e 's/^(name=zsh\/bc .*)load=yes/\1load=no/' \
     config.modules
 
 # Compile and enable zsh/sed if requested.
@@ -338,12 +344,170 @@ MDH
     done
 fi
 
+BC_CFLAGS=""
+BC_LDFLAGS=""
+BC_SRC="$ROOT/bc-src"
+BC_BUILD="$ROOT/build-bc"
+if (( WITH_BC )); then
+    echo "==> enabling zsh/bc"
+
+    cp "$BC_SRC/bc.mdd" "$ROOT/zsh-5.9/Src/Modules/bc.mdd"
+
+    if ! grep -q '^name=zsh/bc ' config.modules; then
+        python3 -c "
+lines = open('config.modules').readlines()
+out = []
+for line in lines:
+    out.append(line)
+    if line.startswith('name=zsh/net/socket '):
+        out.append('name=zsh/bc modfile=Src/Modules/bc.mdd link=no auto=yes load=no\n')
+open('config.modules', 'w').write(''.join(out))
+"
+    fi
+    sed -i '' -E \
+        -e 's/^(name=zsh\/bc .*)link=no/\1link=static/' \
+        -e 's/^(name=zsh\/bc .*)load=no/\1load=yes/' \
+        config.modules
+
+    if [[ ! -f "$BUILD/Src/Modules/bc.epro" ]]; then
+        cat > "$BUILD/Src/Modules/bc.epro" <<'EPRO'
+/* Generated automatically */
+#ifndef have_Src_Modules_bc_globals
+#define have_Src_Modules_bc_globals
+
+extern int setup_ _((UNUSED(Module m)));
+extern int features_ _((Module m,char***features));
+extern int enables_ _((Module m,int**enables));
+extern int boot_ _((UNUSED(Module m)));
+extern int cleanup_ _((Module m));
+extern int finish_ _((UNUSED(Module m)));
+
+#endif /* !have_Src_Modules_bc_globals */
+EPRO
+    fi
+    if [[ ! -f "$BUILD/Src/Modules/bc.mdh" ]]; then
+        cat > "$BUILD/Src/Modules/bc.mdh" <<'MDH'
+#ifndef have_zshQsbc_module
+#define have_zshQsbc_module
+
+# ifndef IMPORTING_MODULE_zshQsbc
+#   define boot_ boot_zshQsbc
+#   define cleanup_ cleanup_zshQsbc
+#   define features_ features_zshQsbc
+#   define enables_ enables_zshQsbc
+#   define setup_ setup_zshQsbc
+#   define finish_ finish_zshQsbc
+# endif /* !IMPORTING_MODULE_zshQsbc */
+
+/* Module dependencies */
+# define IMPORTING_MODULE_zshQsmain 1
+# include "../../Src/zsh.mdh"
+
+# undef mod_import_variable
+# undef mod_import_function
+# if defined(IMPORTING_MODULE_zshQsbc) &&  defined(MODULE)
+#  define mod_import_variable
+#  define mod_import_function
+# else
+#  define mod_import_function
+#  define mod_import_variable
+# endif /* IMPORTING_MODULE_zshQsbc && MODULE */
+# include "bc.epro"
+# undef mod_import_variable
+# define mod_import_variable
+# undef mod_import_variable
+# define mod_import_variable
+# ifndef mod_export
+#  define mod_export
+# endif /* mod_export */
+
+#endif /* !have_zshQsbc_module */
+MDH
+    fi
+
+    mkdir -p "$BC_BUILD"
+
+    # bc needs strgen (native, not emcc) to convert help text and the standard
+    # library script (lib.bc) into C arrays before compilation.
+    echo "==> compiling strgen (native)"
+    cc -O0 -I"$BC_SRC" "$BC_SRC/strgen.c" -o "$BC_BUILD/strgen"
+
+    echo "==> generating bc/dc help and library C sources"
+    "$BC_BUILD/strgen" "$BC_SRC/bc_help.txt" "$BC_SRC/bc_help.c" 1 bc_help "" BC_ENABLED 0
+    "$BC_BUILD/strgen" "$BC_SRC/dc_help.txt" "$BC_SRC/dc_help.c" 1 dc_help "" DC_ENABLED 0
+    "$BC_BUILD/strgen" "$BC_SRC/lib.bc"      "$BC_SRC/bc_lib.c"  1 bc_lib bc_lib_name BC_ENABLED "" 1
+
+    BC_DEFINES="-DBC_ENABLED=1 -DDC_ENABLED=1 -DBC_ENABLE_HISTORY=0 -DBC_ENABLE_EXTRA_MATH=0 -DBC_ENABLE_NLS=0 -DBC_ENABLE_OSSFUZZ=0"
+
+    echo "==> compiling bc-src/"
+    BC_OBJS=(
+        bc_embed bc_args bc_bc_lex bc_bc_parse bc_bc bc_data
+        bc_dc_lex bc_dc_parse bc_dc bc_file bc_history bc_lang
+        bc_lex bc_library bc_main bc_num bc_opt bc_parse bc_program
+        bc_rand bc_read bc_vector bc_vm bc_help dc_help bc_lib
+    )
+    declare -A BC_FILE=(
+        [bc_embed]="$BC_SRC/bc_embed.c"
+        [bc_args]="$BC_SRC/args.c"
+        [bc_bc_lex]="$BC_SRC/bc_lex.c"
+        [bc_bc_parse]="$BC_SRC/bc_parse.c"
+        [bc_bc]="$BC_SRC/bc.c"
+        [bc_data]="$BC_SRC/data.c"
+        [bc_dc_lex]="$BC_SRC/dc_lex.c"
+        [bc_dc_parse]="$BC_SRC/dc_parse.c"
+        [bc_dc]="$BC_SRC/dc.c"
+        [bc_file]="$BC_SRC/file.c"
+        [bc_history]="$BC_SRC/history.c"
+        [bc_lang]="$BC_SRC/lang.c"
+        [bc_lex]="$BC_SRC/lex.c"
+        [bc_library]="$BC_SRC/library.c"
+        [bc_main]="$BC_SRC/main.c"
+        [bc_num]="$BC_SRC/num.c"
+        [bc_opt]="$BC_SRC/opt.c"
+        [bc_parse]="$BC_SRC/parse.c"
+        [bc_program]="$BC_SRC/program.c"
+        [bc_rand]="$BC_SRC/rand.c"
+        [bc_read]="$BC_SRC/read.c"
+        [bc_vector]="$BC_SRC/vector.c"
+        [bc_vm]="$BC_SRC/vm.c"
+        [bc_help]="$BC_SRC/bc_help.c"
+        [dc_help]="$BC_SRC/dc_help.c"
+        [bc_lib]="$BC_SRC/bc_lib.c"
+    )
+    for name in "${BC_OBJS[@]}"; do
+        emcc $BUILD_CFLAGS -c "${BC_FILE[$name]}" \
+            -o "$BC_BUILD/$name.o" \
+            -I"$BC_SRC" \
+            $BC_DEFINES \
+            -Wno-unused-result \
+            -Wno-implicit-function-declaration
+    done
+
+    echo "==> compiling zsh/bc module glue"
+    emcc $BUILD_CFLAGS -c "$BC_SRC/bc_mod.c" \
+        -o "$BC_BUILD/bc_mod.o" \
+        -I"$BUILD/Src/Modules" \
+        -I"$BUILD/Src" \
+        -I"$ROOT/zsh-5.9/Src" \
+        -I"$ROOT/zsh-5.9/Src/Zle" \
+        -I"$ROOT/zsh-5.9/Src/Modules" \
+        -I"$STUB/include" \
+        -I"$BC_SRC" \
+        -DHAVE_CONFIG_H
+
+    BC_CFLAGS="-I$BC_SRC $BC_DEFINES"
+    BC_LDFLAGS="$BC_BUILD/bc_mod.o"
+    for name in "${BC_OBJS[@]}"; do
+        BC_LDFLAGS+=" $BC_BUILD/$name.o"
+    done
+fi
+
 echo "==> patching config.h"
 "$ROOT/bin/patch-config"
 
 echo "==> building"
 emmake make \
-    CFLAGS="$BUILD_CFLAGS $SED_CFLAGS $AWK_CFLAGS" \
+    CFLAGS="$BUILD_CFLAGS $SED_CFLAGS $AWK_CFLAGS $BC_CFLAGS" \
     LDFLAGS="-L$STUB/lib \
         -sFORCE_FILESYSTEM=1 \
         -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
@@ -352,7 +516,8 @@ emmake make \
         -lidbfs.js \
         $EXTRA_LDFLAGS \
         $SED_LDFLAGS \
-        $AWK_LDFLAGS"
+        $AWK_LDFLAGS \
+        $BC_LDFLAGS"
 
 echo "==> deploying to $OUT_DIR"
 mkdir -p "$OUT_DIR"

@@ -662,6 +662,22 @@ const tests = [
     { name: 'rm-rf',
       script: "mkdir -p /tmp/rmrf_test/sub; echo a > /tmp/rmrf_test/f.txt; echo b > /tmp/rmrf_test/sub/g.txt; rm -rf /tmp/rmrf_test; [[ ! -d /tmp/rmrf_test ]] && echo gone || echo present",
       expected: 'gone' },
+    // bc builtin
+    { name: 'bc-basic',
+      script: "bc <<< '1+1'",
+      expected: '2' },
+    { name: 'bc-scale',
+      script: "bc <<< 'scale=4; 22/7'",
+      expected: '3.1428' },
+    { name: 'bc-sqrt',
+      script: "bc <<< 'scale=6; sqrt(2)'",
+      expected: '1.414213' },
+    { name: 'bc-func',
+      script: "bc <<< 'define f(n) { if (n <= 1) return 1; return n * f(n-1); } f(10)'",
+      expected: '3628800' },
+    { name: 'bc-heredoc',
+      script: "bc << 'EOF'\nscale=2\n10/3\nEOF",
+      expected: '3.33' },
 ];
 
 const tbody = document.getElementById('results');

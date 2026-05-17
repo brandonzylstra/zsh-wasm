@@ -255,7 +255,7 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-158 test cases pass (161 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+163 test cases pass (166 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
@@ -293,7 +293,7 @@ bin/build
 `bin/build` accepts optional flags:
 
 ```
-bin/build [--debug] [--out DIR] [--with-sed] [--with-awk]
+bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
 
   --debug      Compile with -O0 -g instead of -Os, and link with
                -sASSERTIONS=1 -gsource-map. Produces a larger build with
@@ -304,7 +304,11 @@ bin/build [--debug] [--out DIR] [--with-sed] [--with-awk]
                Requires sed-src/ in the project root (included in this repo).
   --with-awk   Compile one-true-awk (BWK awk) into the wasm binary as an `awk`
                builtin. Requires awk-src/ in the project root (included in
-               this repo). Use --with-sed --with-awk together for the full build.
+               this repo).
+  --with-bc    Compile Gavin Howard bc into the wasm binary as a `bc` builtin.
+               Requires bc-src/ in the project root (included in this repo).
+               bc <<< 'scale=4; 22/7' and heredoc input work; pipes to bc do not
+               (pipes require fork). dc is also available.
 ```
 
 JS modules
@@ -406,12 +410,13 @@ most common ones:
 
 Note: `sort` supports `-k N` (sort by Nth whitespace-delimited field); `cut` supports `-c N` and `-c N-M` (character positions) in addition to the field-based `-f` flag.
 
-When built with `bin/build --with-sed --with-awk`, compiled-in builtins are also available:
+When built with `--with-sed`, `--with-awk`, and/or `--with-bc`, compiled-in builtins are also available:
 
 | Command | Flag      | Source    | Notes |
 |---------|-----------|-----------|-------|
-| `sed`   | `--with-sed` | OpenBSD sed | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. Use file args; stdin pipes don't work. |
-| `awk`   | `--with-awk` | one-true-awk (BWK) | Full awk: patterns, BEGIN/END, field splitting (`-F`), variables (`-v`), gsub/sub/split, printf. Use file args or `awk 'prog' <<< data`; pipes require fork and don't work. |
+| `sed`   | `--with-sed` | OpenBSD sed | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. Use file args; stdin via `<<< text` works. |
+| `awk`   | `--with-awk` | one-true-awk (BWK) | Full awk: patterns, BEGIN/END, field splitting (`-F`), variables (`-v`), gsub/sub/split, printf. File args or `awk 'prog' <<< data` work; pipes require fork and don't work. |
+| `bc`    | `--with-bc`  | Gavin Howard bc (MIT) | Arbitrary-precision math: `scale`, `sqrt()`, user-defined functions. Use `bc <<< 'expr'` or heredoc; `echo expr \| bc` requires fork. `dc` is also available. |
 
 Known Limitations
 -----------------

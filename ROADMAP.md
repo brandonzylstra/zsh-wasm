@@ -61,7 +61,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 161 test cases (158 passing, 3 `knownFail` documenting known limitations) and compares actual vs. expected output:
+`web/test.html` runs 166 test cases (163 passing, 3 `knownFail` documenting known limitations) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
@@ -174,6 +174,29 @@ builtin via `bin/build --with-awk`. Supports user-defined functions, arrays,
 Same embedding pattern as sed: `exit()` replaced by `longjmp`-based wrapper,
 all global state reset between calls, registered as a zsh builtin in
 `awk-src/awk_mod.c`.
+
+---
+
+### bc ✓ done
+
+Gavin Howard's bc (BSD-2-Clause, v7.0.3) compiled into the wasm binary as a zsh
+builtin via `bin/build --with-bc`. Supports arbitrary-precision arithmetic, `scale`,
+`sqrt()`, user-defined functions, and dc mode. History and NLS disabled for wasm.
+
+Embedding approach (same pattern as sed/awk):
+- `bc-src/` holds the bc source with two modifications: `main()` renamed to
+  `bc_embed_main()`, and the 5 `exit()` calls in `vm.c`/`file.c` replaced by
+  `bc_do_exit()` which longjmps to the module wrapper's setjmp.
+- bc requires a code generation step: `gen/strgen.c` (compiled natively) converts
+  `gen/bc_help.txt`, `gen/dc_help.txt`, and `gen/lib.bc` to C source arrays.
+  `bin/build --with-bc` runs this automatically with a local `build-bc/strgen`.
+- Build flags: `BC_ENABLED=1 DC_ENABLED=1 BC_ENABLE_HISTORY=0 BC_ENABLE_EXTRA_MATH=0
+  BC_ENABLE_NLS=0 BC_ENABLE_OSSFUZZ=0`
+
+Known limitation: `echo expr | bc` requires a pipe (fork). Use `bc <<< 'expr'` or
+a heredoc instead — both work because they use temp files rather than fork.
+
+Source: `bc-7.0.3/` (downloaded from GitHub); `bc-src/` holds the patched copy.
 
 ---
 

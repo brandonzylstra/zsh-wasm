@@ -1,0 +1,7 @@
+name=zsh/bc
+link=dynamic
+load=no
+
+autofeatures="b:bc"
+
+objects=""

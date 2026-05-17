@@ -220,34 +220,40 @@ static int bin_grep(char *name, char **args, Options ops, int func) {
 
 ---
 
-## 3. Compiled `bc`
+## 3. Compiled `bc` ✓ done
 
-**Status:** Planned. `$(( ... ))` in zsh is integer-only. Scripts that need
-floating-point math (e.g., `echo "scale=2; 22/7" | bc`) have no alternative
-today.
+**Status:** Complete. Gavin Howard's bc v7.0.3 (BSD-2-Clause) compiled into
+the wasm binary as a zsh builtin via `bin/build --with-bc`. Tests: bc-basic,
+bc-scale, bc-sqrt, bc-func, bc-heredoc all pass.
 
-**Source:** [Gavin Howard's bc](https://git.gavinhoward.com/gavin/bc) — the
-implementation that ships with macOS 14+ and many BSDs. MIT license, ~12 KLOC
-of portable C. Key advantages:
-
-- No yacc/flex dependency (hand-written parser)
-- Explicitly designed for portability (runs on embedded systems, WASM-friendly)
-- Supports both POSIX `bc` and `dc` modes
-- No readline/history dependency at compile time (`BC_ENABLE_HISTORY=0`)
-- MIT license — no attribution complications
+**Source:** Gavin Howard's bc — the implementation that ships with macOS 14+
+and many BSDs. BSD-2-Clause license (not MIT as initially noted), ~12 KLOC
+of portable C. No yacc/flex, explicitly designed for portability.
 
 **Checklist:**
-- [ ] Download Gavin Howard bc source into `bc-src/` (tag a specific release)
-- [ ] Build it natively first to understand the build system
-- [ ] Identify all `exit()` calls → replace with `bc_do_exit()` + `longjmp`
-- [ ] Identify file-scope statics that need reset between calls
-- [ ] Create `bc_embed.h` / `bc_embed.c`
-- [ ] Create `bc_mod.c` (zsh builtin glue)
-- [ ] Create `bc.mdd`
-- [ ] Add `--with-bc` flag to `bin/build`
-- [ ] Rebuild; test `echo "scale=4; 1/3" | bc` → `0.3333` (but see obstacle 1)
-- [ ] Add tests: basic arithmetic, scale, `sqrt()`, `define` functions
-- [ ] Update README and ROADMAP
+- [x] Download Gavin Howard bc source into `bc-7.0.3/` (tag v7.0.3)
+- [x] Build it natively to understand the build system
+- [x] Rename `main()` to `bc_embed_main()` in main.c
+- [x] Replace 5 `exit()` calls in vm.c and file.c with `bc_do_exit()` + longjmp
+- [x] Create `bc_embed.h` / `bc_embed.c`
+- [x] Create `bc_mod.c` (zsh builtin glue)
+- [x] Create `bc.mdd`
+- [x] Add `--with-bc` flag to `bin/build` (includes strgen native compilation
+      and generation of bc_help.c, dc_help.c, bc_lib.c from gen/ sources)
+- [x] Rebuild; test `bc <<< 'scale=4; 22/7'` → `3.1428`
+- [x] Add 5 tests: bc-basic, bc-scale, bc-sqrt, bc-func, bc-heredoc
+- [x] Update README and ROADMAP
+
+**Key implementation notes:**
+- bc requires `BC_ENABLED=1 DC_ENABLED=1` as explicit defines (not set by
+  default in individual source files — normally set by bc's own build system)
+- bc requires a native code generator (`gen/strgen.c`) to produce `bc_help.c`,
+  `dc_help.c`, and `bc_lib.c` from text/script sources; `bin/build --with-bc`
+  compiles and runs strgen automatically
+- `BC_ENABLE_EXTRA_MATH=0` disables the `rand()`/`irand()` extension that
+  reads `/dev/urandom` — removes a wasm compatibility risk
+- In wasm, each `runZshScript()` call creates a fresh Worker, so bc global
+  state (`vm_data`) is naturally reset; no `bc_full_reset()` needed
 
 **Obstacles:**
 
