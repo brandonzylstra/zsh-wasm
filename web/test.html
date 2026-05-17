@@ -103,7 +103,7 @@
 </table>
 
 <script type="module">
-import { runZshScript } from './zsh-runtime.js';
+import { runZshScript, createPool, shutdownDefaultPool } from './zsh-runtime.js';
 
 const tests = [
     // basic shell
@@ -569,6 +569,12 @@ const tests = [
     { name: 'subshell-nested',
       script: "(echo $(echo deep))",
       expected: 'deep' },
+    // subshell limitation: variable mutations inside ( ) leak into the outer scope
+    // because `(cmd)` is rewritten to `{ cmd }` (no true process isolation without fork).
+    { name: 'subshell-isolation',
+      script: "x=outer; (x=inner); echo $x",
+      expected: 'outer',
+      knownFail: true },
     // pipe simulation: | transformed to temp-file chaining by simulatePipes()
     { name: 'pipe-simple',
       script: "echo hello | grep hello",
@@ -592,6 +598,39 @@ const tests = [
       expected: 'zsh-wasm:',
       checkStderr: true,
       matchIncludes: true },
+    // with fork:'off', pipe-free scripts still run normally
+    { name: 'fork-off-nopipe',
+      script: "x=42; echo result=$x",
+      fork: 'off',
+      expected: 'result=42' },
+    // worker pool: createPool / parallel execution / shutdown
+    { name: 'pool-basic',
+      run: async () => {
+        const pool = createPool(1);
+        const r = await pool.run('echo pool-works');
+        pool.shutdown();
+        return r;
+      },
+      expected: 'pool-works' },
+    { name: 'pool-parallel',
+      run: async () => {
+        const pool = createPool(2);
+        const [a, b] = await Promise.all([
+          pool.run('echo alpha'),
+          pool.run('echo beta'),
+        ]);
+        pool.shutdown();
+        return { stdout: [a.stdout.trim(), b.stdout.trim()].sort().join('\n'), stderr: '', exitCode: 0 };
+      },
+      expected: 'alpha\nbeta' },
+    { name: 'pool-shutdown',
+      run: async () => {
+        await runZshScript('echo prime');   // ensure default pool is live
+        shutdownDefaultPool();              // terminate it
+        const r = await runZshScript('echo after-shutdown'); // new pool created on demand
+        return r;
+      },
+      expected: 'after-shutdown' },
     { name: 'grep-stdin',
       script: "grep hello <<< 'hello world'",
       expected: 'hello world' },
@@ -912,7 +951,11 @@ async function runTest(t, tr) {
 
     let result;
     try {
-        result = await runZshScript(t.script, { stdin: t.stdin ?? null, fork: t.fork ?? 'simulate' });
+        if (t.run) {
+            result = await t.run();
+        } else {
+            result = await runZshScript(t.script, { stdin: t.stdin ?? null, fork: t.fork ?? 'simulate' });
+        }
     } catch(e) {
         result = { stdout: '', stderr: String(e), exitCode: 1 };
     }

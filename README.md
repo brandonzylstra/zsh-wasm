@@ -255,7 +255,7 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-202 test cases pass (202 total; 0 `knownFail`). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+206 test cases pass (207 total; 1 `knownFail` documenting subshell variable isolation). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, grep `-A`/`-B`/`-C` context lines, sort combined flags,
@@ -269,7 +269,11 @@ seq, mktemp, sleep, find (`-name`/`-type`/`-maxdepth`/`-newer`), env/printenv, s
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
 `$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, `zstat`,
 pipe simulation (`a | b` rewritten to temp-file chaining), subshell simulation
-(`(cmd)` rewritten to `{ cmd }` at top level), and per-test rerun buttons in the test UI.
+(`(cmd)` rewritten to `{ cmd }` at top level), `fork: 'off'` no-pipe path,
+`createPool`/parallel execution/`shutdownDefaultPool`, and per-test rerun buttons in the test UI.
+
+Known limitation: subshell variable mutations leak into the outer scope (`(x=inner)` is
+rewritten to `{ x=inner }` — no true process isolation without fork).
 
 Scripts
 -------

@@ -61,7 +61,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 202 test cases (all passing, 0 `knownFail`) and compares actual vs. expected output:
+`web/test.html` runs 207 test cases (206 passing, 1 `knownFail`) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
@@ -79,7 +79,13 @@ ranges, in-place editing, back-references), awk (field splitting, `-F`,
 `typeset -i`, arithmetic (modulo, negative), `file-test` operators
 (`-f`/`-d`/`-e`/`-s`), parameter join with custom separator, string/parameter
 operations, pipe simulation (`a | b | c` rewritten to temp-file chaining),
-subshell simulation (`(cmd)` rewritten to `{ cmd }` at top level).
+subshell simulation (`(cmd)` rewritten to `{ cmd }` at top level),
+`fork: 'off'` no-pipe path, and `createPool`/`shutdownDefaultPool` (including
+parallel execution via `createPool(2)`).
+
+Known limitation (1 `knownFail`): subshell variable mutations leak into the
+outer scope because `(cmd)` is rewritten to `{ cmd }` — no true process
+isolation without fork. `x=outer; (x=inner); echo $x` prints `inner` not `outer`.
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
