@@ -255,7 +255,7 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-193 test cases pass (195 total; 2 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+198 test cases pass (199 total; 1 `knownFail` documents expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, grep `-A`/`-B`/`-C` context lines, sort combined flags,

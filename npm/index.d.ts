@@ -7,6 +7,13 @@ export interface RunOptions {
    * - `'idbfs'` — IndexedDB-backed; files under `/home/user` persist across page reloads.
    */
   fs?: 'memfs' | 'idbfs' | null;
+  /**
+   * Fork/pipe strategy.
+   * - `'simulate'` (default) — rewrites `a | b` as temp-file chaining so pipes work without fork().
+   * - `'off'` — no transformation; pipes fail silently with a diagnostic in stderr.
+   * Future: `'native'` for a wasm-threads build with real fork().
+   */
+  fork?: 'simulate' | 'off';
 }
 
 export interface ZshResult {

@@ -557,19 +557,31 @@ const tests = [
     { name: 'mv-removes-src',
       script: "echo hi > /tmp/mvsrc2.txt; mv /tmp/mvsrc2.txt /tmp/mvdst2.txt; [[ ! -f /tmp/mvsrc2.txt ]] && echo gone || echo present",
       expected: 'gone' },
-    // knownFail: subshell requires fork
+    // knownFail: subshell requires fork — variable isolation not yet simulated
     { name: 'subshell',
       script: "(echo inner); echo outer",
       expected: 'inner\nouter',
       knownFail: true },
-    // knownFail: pipes require fork — neither side of | works without it
+    // pipe simulation: | transformed to temp-file chaining by simulatePipes()
     { name: 'pipe-simple',
       script: "echo hello | grep hello",
-      expected: 'hello',
-      knownFail: true },
-    // pipe fork failure produces a helpful diagnostic, not a raw system error
+      expected: 'hello' },
+    { name: 'pipe-chain',
+      script: "printf 'c\\na\\nb' | sort | head -n 2",
+      expected: 'a\nb' },
+    { name: 'pipe-grep',
+      script: "printf 'foo\\nbar\\nbaz\\n' | grep ba",
+      expected: 'bar\nbaz' },
+    { name: 'pipe-wc',
+      script: "printf 'a\\nb\\nc\\n' | wc -l",
+      expected: '3' },
+    { name: 'pipe-multi',
+      script: "echo one | cat\necho two | cat",
+      expected: 'one\ntwo' },
+    // with fork:'off', pipes fail and a helpful diagnostic appears in stderr
     { name: 'pipe-helpful-error',
       script: "echo hello | grep hello",
+      fork: 'off',
       expected: 'zsh-wasm:',
       checkStderr: true,
       matchIncludes: true },
@@ -893,7 +905,7 @@ async function runTest(t, tr) {
 
     let result;
     try {
-        result = await runZshScript(t.script, { stdin: t.stdin ?? null });
+        result = await runZshScript(t.script, { stdin: t.stdin ?? null, fork: t.fork ?? 'simulate' });
     } catch(e) {
         result = { stdout: '', stderr: String(e), exitCode: 1 };
     }

@@ -111,24 +111,30 @@ wc() {
   done
 }
 head() {
-  local n=10 f
+  local n=10 f _stdin
   local -a lines
   [[ \${1-} == -[0-9]* ]] && n=\${1#-} && shift
   [[ \${1-} == -n      ]] && n=$2      && shift 2
-  for f; do
-    lines=("\${(@f)$(<$f)}")
+  if (( $# )); then
+    for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[1,$n]}; done
+  else
+    IFS= read -r -d '' _stdin
+    lines=("\${(@f)_stdin}")
     print -l -- \${lines[1,$n]}
-  done
+  fi
 }
 tail() {
-  local n=10 f
+  local n=10 f _stdin
   local -a lines
   [[ \${1-} == -[0-9]* ]] && n=\${1#-} && shift
   [[ \${1-} == -n      ]] && n=$2      && shift 2
-  for f; do
-    lines=("\${(@f)$(<$f)}")
+  if (( $# )); then
+    for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[-$n,-1]}; done
+  else
+    IFS= read -r -d '' _stdin
+    lines=("\${(@f)_stdin}")
     print -l -- \${lines[-$n,-1]}
-  done
+  fi
 }
 grep() {
   local _gi=0 _gv=0 _gn=0 _gc=0 _ga=0 _gb=0 pat _src line _cnt _num _hit _stdin
@@ -674,6 +680,76 @@ function hasPipelineOp(src) {
     return / \| /.test(src);
 }
 
+// Transforms `a | b | c` pipelines into sequential temp-file chaining so they work
+// without fork(): `{ a } >/tmp/_zpipe_0; { b } </tmp/_zpipe_0 >/tmp/_zpipe_1; { c } </tmp/_zpipe_1`
+//
+// Tracks quote/bracket depth to skip pipes inside strings and subexpressions.
+// Known limits: pipes inside heredoc content and bare case-pattern alternates (a|b) without
+// surrounding parens are not detected as non-pipes — both are rare in piping contexts.
+//
+// fork option: 'simulate' (default, uses this fn) | 'off' (no-op, original behaviour)
+//              Future: 'native' for a --with-threads wasm build with real fork().
+function simulatePipes(src) {
+    const out = [];
+    let i = 0, n = src.length;
+    let inSQ = false, inDQ = false, depth = 0, pipeCount = 0;
+    let buf = [], pipePos = []; // chars for current pipeline group; | offsets within buf
+
+    const flush = (sep) => {
+        const s = buf.join('');
+        if (!pipePos.length) {
+            out.push(s);
+        } else {
+            const segs = [];
+            let prev = 0;
+            for (const p of pipePos) { segs.push(s.slice(prev, p).trim()); prev = p + 1; }
+            segs.push(s.slice(prev).trim());
+            const parts = [];
+            for (let k = 0; k < segs.length; k++) {
+                const cur   = `/tmp/_zpipe_${pipeCount}`;
+                const prev2 = `/tmp/_zpipe_${pipeCount - 1}`;
+                if      (k === segs.length - 1) parts.push(`{ ${segs[k]} } <${prev2}`);
+                else if (k === 0)               { parts.push(`{ ${segs[k]} } >${cur}`);             pipeCount++; }
+                else                            { parts.push(`{ ${segs[k]} } <${prev2} >${cur}`);  pipeCount++; }
+            }
+            out.push(parts.join('; '));
+        }
+        if (sep) out.push(sep);
+        buf = []; pipePos = [];
+    };
+
+    while (i < n) {
+        const c = src[i];
+        if (inSQ) { buf.push(c); if (c === "'") inSQ = false; i++; continue; }
+        if (c === '\\') { buf.push(c, src[i+1] ?? ''); i += 2; continue; }
+        if (inDQ) { buf.push(c); if (c === '"') inDQ = false; i++; continue; }
+        if (c === "'") { inSQ = true;  buf.push(c); i++; continue; }
+        if (c === '"') { inDQ = true;  buf.push(c); i++; continue; }
+
+        // Depth openers/closers — check two-char sequences first.
+        if (c === '[' && src[i+1] === '[')               { depth++;              buf.push('[','['); i += 2; continue; }
+        if (c === ']' && src[i+1] === ']' && depth > 0)  { depth--;              buf.push(']',']'); i += 2; continue; }
+        if (c === '$' && src[i+1] === '(')               { depth++;              buf.push('$','('); i += 2; continue; }
+        if (c === '(' || c === '{')                      { depth++;              buf.push(c);       i++;    continue; }
+        if ((c === ')' || c === '}') && depth > 0)       { depth--;              buf.push(c);       i++;    continue; }
+        if (depth > 0) { buf.push(c); i++; continue; }
+
+        // Top-level pipe / boundary detection.
+        if (c === '|') {
+            const nx = src[i+1];
+            if (nx === '|') { flush('||'); i += 2; continue; }
+            if (nx === '&') { flush('|&'); i += 2; continue; }
+            pipePos.push(buf.length); buf.push(c); i++; continue;
+        }
+        if (c === ';' || c === '\n')       { flush(c);    i++;    continue; }
+        if (c === '&' && src[i+1] === '&') { flush('&&'); i += 2; continue; }
+        if (c === '&')                     { flush(c);    i++;    continue; }
+        buf.push(c); i++;
+    }
+    flush('');
+    return out.join('');
+}
+
 // Pool of pre-warmed Web Workers. Each worker holds a fully initialized wasm
 // module ready to run a script immediately. After each run the worker begins
 // pre-initializing the next module, overlapping init with the caller's read time.
@@ -701,7 +777,9 @@ class WorkerPool {
                 const job = w._job;
                 w._job = null;
                 let { stdout, stderr, exitCode } = data;
-                if (!stdout && !stderr && hasPipelineOp(job.src)) {
+                // Only inject the helpful pipe diagnostic when simulation is off and
+                // the script had a pipeline but produced no output at all.
+                if (!stdout && !stderr && job.fork === 'off' && hasPipelineOp(job.src)) {
                     stderr = 'zsh-wasm: pipes require fork(), which is not available in WebAssembly.\n' +
                              '  Use here-strings or heredocs instead of pipelines.\n' +
                              "  Example: bc <<< '1+1'  (not: echo '1+1' | bc)";
@@ -718,18 +796,19 @@ class WorkerPool {
 
     #dispatch(worker, job) {
         worker._job = job;
+        const src = job.fork !== 'off' ? simulatePipes(job.src) : job.src;
         worker.postMessage({
             type: 'run',
-            src: BUILTINS_PREAMBLE + job.src + '\n',
+            src: BUILTINS_PREAMBLE + src + '\n',
             fs: job.fs ?? ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
             stdin: job.stdin ?? null,
         });
     }
 
-    run(src, { stdin = null, fs = null } = {}) {
+    run(src, { stdin = null, fs = null, fork = 'simulate' } = {}) {
         return new Promise((resolve, reject) => {
-            const job = { src, stdin, fs, resolve, reject };
+            const job = { src, stdin, fs, fork, resolve, reject };
             if (this.#ready.length > 0) {
                 this.#dispatch(this.#ready.shift(), job);
             } else {
@@ -750,9 +829,9 @@ class WorkerPool {
 // Lazy default pool — created on first runZshScript() call.
 let _defaultPool = null;
 
-export function runZshScript(src, opts = {}) {
+export function runZshScript(src, { stdin = null, fs = null, fork = 'simulate' } = {}) {
     if (!_defaultPool) _defaultPool = new WorkerPool(1);
-    return _defaultPool.run(src, opts);
+    return _defaultPool.run(src, { stdin, fs, fork });
 }
 
 /** Create a pool of pre-warmed workers. Call pool.run(src, opts) and pool.shutdown(). */
