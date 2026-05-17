@@ -730,9 +730,47 @@ function simulatePipes(src) {
         if (c === '[' && src[i+1] === '[')               { depth++;              buf.push('[','['); i += 2; continue; }
         if (c === ']' && src[i+1] === ']' && depth > 0)  { depth--;              buf.push(']',']'); i += 2; continue; }
         if (c === '$' && src[i+1] === '(')               { depth++;              buf.push('$','('); i += 2; continue; }
-        if (c === '(' || c === '{')                      { depth++;              buf.push(c);       i++;    continue; }
+        if (c === '{')                                   { depth++;              buf.push(c);       i++;    continue; }
+        if (c === '(' && depth > 0)                      { depth++;              buf.push(c);       i++;    continue; }
         if ((c === ')' || c === '}') && depth > 0)       { depth--;              buf.push(c);       i++;    continue; }
         if (depth > 0) { buf.push(c); i++; continue; }
+
+        // Top-level `(` — subshell or arithmetic `((`.
+        if (c === '(') {
+            // `((expr))` arithmetic — track as depth, no subshell transform.
+            if (src[i+1] === '(') { depth++; buf.push(c); i++; continue; }
+
+            // Determine if this `(` opens a subshell: it must NOT follow an
+            // identifier (function call) or `=` (array assignment like `a=(...)`).
+            const prevStr  = buf.join('').trimEnd();
+            const prevWord = (prevStr.match(/(\w+)$/) ?? ['',''])[1];
+            const isArrayAssign = prevStr.endsWith('='); // catches `a=(` and `a+=(`
+            const shellKw = new Set(['if','then','else','elif','fi','do','done',
+                                     'while','until','for','case','esac','in',
+                                     'select','time','!','function']);
+            if (!isArrayAssign && (!prevWord || shellKw.has(prevWord))) {
+                // Subshell: collect content up to matching `)`, recursively transform, emit `{ ... }`.
+                i++; // skip opening `(`
+                const ss = i;
+                let iDepth = 1, iSQ2 = false, iDQ2 = false;
+                while (i < n) {
+                    const ic = src[i];
+                    if (iSQ2) { if (ic === "'") iSQ2 = false; i++; continue; }
+                    if (ic === '\\') { i += 2; continue; }
+                    if (iDQ2) { if (ic === '"') iDQ2 = false; i++; continue; }
+                    if (ic === "'") { iSQ2 = true;  i++; continue; }
+                    if (ic === '"') { iDQ2 = true;  i++; continue; }
+                    if (ic === '(' || ic === '{') { iDepth++; i++; continue; }
+                    if (ic === ')' || ic === '}') { iDepth--; i++; if (!iDepth) break; continue; }
+                    i++;
+                }
+                const subContent = src.slice(ss, i - 1);
+                for (const ch of `{ ${simulatePipes(subContent)} }`) buf.push(ch);
+                continue;
+            }
+            // Not a subshell (e.g. function call `foo(...)`): treat as normal depth opener.
+            depth++; buf.push(c); i++; continue;
+        }
 
         // Top-level pipe / boundary detection.
         if (c === '|') {
