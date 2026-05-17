@@ -706,6 +706,35 @@ const tests = [
     { name: 'find-name-type',
       script: "mkdir -p /tmp/ftnt/sub\necho hi > /tmp/ftnt/a.txt\necho hi > /tmp/ftnt/sub/b.txt\nmkdir -p /tmp/ftnt/notes.txt\nfind /tmp/ftnt -name '*.txt' -type f",
       expected: '/tmp/ftnt/a.txt\n/tmp/ftnt/sub/b.txt' },
+    { name: 'find-multi-dir',
+      script: "mkdir -p /tmp/fmd1 /tmp/fmd2\necho hi > /tmp/fmd1/a.txt\necho hi > /tmp/fmd2/b.txt\nfind /tmp/fmd1 /tmp/fmd2 -name '*.txt'",
+      expected: '/tmp/fmd1/a.txt\n/tmp/fmd2/b.txt' },
+    // head/tail: multi-file (local-in-loop bug was fixed)
+    { name: 'head-multi',
+      script: "printf 'a\\nb\\nc\\n' > /tmp/hm1.txt\nprintf 'x\\ny\\nz\\n' > /tmp/hm2.txt\nhead -2 /tmp/hm1.txt /tmp/hm2.txt",
+      expected: 'a\nb\nx\ny' },
+    { name: 'tail-multi',
+      script: "printf 'a\\nb\\nc\\n' > /tmp/tm1.txt\nprintf 'x\\ny\\nz\\n' > /tmp/tm2.txt\ntail -1 /tmp/tm1.txt /tmp/tm2.txt",
+      expected: 'c\nz' },
+    // grep: combined flags
+    { name: 'grep-combined',
+      script: "printf 'Apple\\nbanana\\nAPRICOT\\ncherry\\n' > /tmp/grc.txt\ngrep -in 'ap' /tmp/grc.txt",
+      expected: '1:Apple\n3:APRICOT' },
+    // cut: custom delimiter
+    { name: 'cut-delim',
+      script: "printf 'a,b,c\\n1,2,3\\n' > /tmp/csv.txt\ncut -d, -f2 /tmp/csv.txt",
+      expected: 'b\n2' },
+    // sort: stdin
+    { name: 'sort-stdin',
+      script: "sort <<< $'cherry\\napple\\nbanana'",
+      expected: 'apple\nbanana\ncherry' },
+    // uniq: stdin
+    { name: 'uniq-stdin',
+      script: "printf 'a\\na\\nb\\nb\\nb\\nc\\n' > /tmp/uqs.txt\nuniq /tmp/uqs.txt",
+      expected: 'a\nb\nc' },
+    { name: 'uniq-stdin-pipe',
+      script: "uniq <<< $'a\\na\\nb\\nc\\nc'",
+      expected: 'a\nb\nc' },
 ];
 
 const tbody = document.getElementById('results');

@@ -364,6 +364,78 @@
         </div>
     </div>
 
+    <div class="example">
+        <div class="example-header">File Operations</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-files"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-files"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">grep — Pattern Search</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-grep"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-grep"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Text Processing</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-text"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-text"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">find — Recursive Search</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-find"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-find"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">POSIX Regex</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-regex"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-regex"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">sed — Stream Editing</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-sed"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-sed"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">awk — Data Processing</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-awk"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-awk"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">bc — Arbitrary Precision Math</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-bc"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-bc"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
+        <div class="example-header">Utilities</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-utils"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-utils"></pre></div>
+        </div>
+    </div>
+
 </div>
 
 <!-- zsh scripts — browser ignores unknown type; loader executes them -->
@@ -582,6 +654,169 @@ tail -5 /home/user/visits.log
 echo ""
 echo "Files in /home/user/:"
 ls -l /home/user/
+</script>
+
+<script type="text/zsh" data-id="files" data-stdout="#out-files" data-stderr="#out-files">
+mkdir -p /tmp/ex
+printf 'one\ntwo\nthree\nfour\nfive\n' > /tmp/ex/nums.txt
+printf 'alpha\nbeta\ngamma\n' > /tmp/ex/letters.txt
+
+cat /tmp/ex/nums.txt
+echo "---"
+head -3 /tmp/ex/nums.txt
+echo "---"
+tail -2 /tmp/ex/nums.txt
+echo "---"
+wc -l /tmp/ex/nums.txt /tmp/ex/letters.txt
+echo "---"
+cp /tmp/ex/nums.txt /tmp/ex/copy.txt
+ls /tmp/ex/
+echo "---"
+[[ -f /tmp/ex/copy.txt ]] && echo "copy.txt: exists"
+[[ -d /tmp/ex ]]          && echo "/tmp/ex:  is a directory"
+</script>
+
+<script type="text/zsh" data-id="grep" data-stdout="#out-grep" data-stderr="#out-grep">
+printf 'apple\nbanana\napricot\nCherry\n' > /tmp/fruits.txt
+
+grep 'an' /tmp/fruits.txt
+echo "---"
+grep -i 'apple' /tmp/fruits.txt     # case-insensitive
+echo "---"
+grep -v 'a' /tmp/fruits.txt         # invert: lines without 'a'
+echo "---"
+grep -n 'a' /tmp/fruits.txt         # with line numbers
+echo "---"
+grep -c 'a' /tmp/fruits.txt         # count matching lines
+echo "---"
+grep '^a' /tmp/fruits.txt           # anchored to start
+</script>
+
+<script type="text/zsh" data-id="text" data-stdout="#out-text" data-stderr="#out-text">
+printf 'banana\napple\ncherry\napple\ndate\nbanana\n' > /tmp/w.txt
+
+echo "=== sort ==="
+sort /tmp/w.txt
+
+echo "=== sort -u (unique) ==="
+sort -u /tmp/w.txt
+
+echo "=== uniq (adjacent dedup) ==="
+sort /tmp/w.txt > /tmp/ws.txt
+uniq /tmp/ws.txt
+
+echo "=== cut -d, -f2 ==="
+printf 'name,age,city\nAlice,30,NYC\nBob,25,LA\n' > /tmp/csv.txt
+cut -d, -f2 /tmp/csv.txt
+
+echo "=== tr ==="
+tr 'a-z' 'A-Z' <<< "hello world"
+</script>
+
+<script type="text/zsh" data-id="find" data-stdout="#out-find" data-stderr="#out-find">
+mkdir -p /tmp/proj/src /tmp/proj/tests
+echo 'main code'  > /tmp/proj/src/main.sh
+echo 'helpers'    > /tmp/proj/src/util.sh
+echo 'test suite' > /tmp/proj/tests/run.sh
+echo 'readme'     > /tmp/proj/README.md
+
+echo "=== all files ==="
+find /tmp/proj -type f
+
+echo "=== shell scripts only ==="
+find /tmp/proj -name '*.sh'
+
+echo "=== top level only (maxdepth 1) ==="
+find /tmp/proj -maxdepth 1
+</script>
+
+<script type="text/zsh" data-id="regex" data-stdout="#out-regex" data-stderr="#out-regex">
+for s in "version 2.14" "no-numbers" "zsh5.9"; do
+  if [[ $s =~ '([0-9]+)\.([0-9]+)' ]]; then
+    echo "$s → major=$match[1] minor=$match[2]"
+  else
+    echo "$s → no version found"
+  fi
+done
+
+echo "---"
+for email in "alice@example.com" "bad@" "plain"; do
+  if [[ $email =~ '^[^@]+@[^@]+\.[^@]+$' ]]; then
+    echo "$email: valid"
+  else
+    echo "$email: invalid"
+  fi
+done
+</script>
+
+<script type="text/zsh" data-id="sed" data-stdout="#out-sed" data-stderr="#out-sed">
+printf 'Hello World\nfoo bar baz\nfoo again\n2024-01-15\n' > /tmp/sd.txt
+
+echo "=== substitute first occurrence ==="
+sed 's/foo/qux/' /tmp/sd.txt
+
+echo "=== global substitute ==="
+sed 's/[aeiou]/_/g' /tmp/sd.txt
+
+echo "=== delete matching lines ==="
+sed '/foo/d' /tmp/sd.txt
+
+echo "=== prefix lines 2-3 ==="
+sed '2,3s/^/>> /' /tmp/sd.txt
+</script>
+
+<script type="text/zsh" data-id="awk" data-stdout="#out-awk" data-stderr="#out-awk">
+printf 'Alice  85\nBob    92\nCarol  78\nDave   95\nEve    88\n' > /tmp/scores.txt
+
+echo "=== print fields ==="
+awk '{print $1 " scored " $2}' /tmp/scores.txt
+
+echo "=== filter ==="
+awk '$2 >= 90 {print $1, "→ A"}' /tmp/scores.txt
+
+echo "=== aggregate ==="
+awk '{sum += $2; n++} END {printf "avg: %.1f  max: %d\n", sum/n, max}
+     $2 > max {max = $2}' /tmp/scores.txt
+</script>
+
+<script type="text/zsh" data-id="bc" data-stdout="#out-bc" data-stderr="#out-bc">
+echo "=== integer arithmetic ==="
+bc <<< '2 ^ 32'
+bc <<< '(12345 * 67890) % 9999'
+
+echo "=== high-precision decimal ==="
+bc <<< 'scale=20; 355/113'
+
+echo "=== user-defined function ==="
+bc << 'EOF'
+define factorial(n) {
+  if (n <= 1) return 1
+  return n * factorial(n - 1)
+}
+factorial(15)
+EOF
+</script>
+
+<script type="text/zsh" data-id="utils" data-stdout="#out-utils" data-stderr="#out-utils">
+echo "=== seq ==="
+seq 1 5
+seq 0 2 10
+
+echo "=== date ==="
+date '+%Y-%m-%d'
+date '+%A, %B %d'
+
+echo "=== basename / dirname ==="
+p="/usr/local/lib/libz.1.dylib"
+basename $p
+dirname  $p
+basename $p .dylib      # strip suffix
+
+echo "=== file-test operators ==="
+touch /tmp/testfile
+[[ -f /tmp/testfile ]] && echo "-f: is a regular file"
+[[ -e /tmp/testfile ]] && echo "-e: exists"
+[[ -d /tmp ]]          && echo "-d: /tmp is a directory"
 </script>
 
 <!-- CodeMirror 5 -->

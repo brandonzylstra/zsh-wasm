@@ -111,22 +111,22 @@ wc() {
   done
 }
 head() {
-  local n=10
-  [[ $1 == -[0-9]* ]] && n=\${1#-} && shift
-  [[ $1 == -n      ]] && n=$2      && shift 2
-  local f
+  local n=10 f
+  local -a lines
+  [[ \${1-} == -[0-9]* ]] && n=\${1#-} && shift
+  [[ \${1-} == -n      ]] && n=$2      && shift 2
   for f; do
-    local -a lines=("\${(@f)$(<$f)}")
+    lines=("\${(@f)$(<$f)}")
     print -l -- \${lines[1,$n]}
   done
 }
 tail() {
-  local n=10
-  [[ $1 == -[0-9]* ]] && n=\${1#-} && shift
-  [[ $1 == -n      ]] && n=$2      && shift 2
-  local f
+  local n=10 f
+  local -a lines
+  [[ \${1-} == -[0-9]* ]] && n=\${1#-} && shift
+  [[ \${1-} == -n      ]] && n=$2      && shift 2
   for f; do
-    local -a lines=("\${(@f)$(<$f)}")
+    lines=("\${(@f)$(<$f)}")
     print -l -- \${lines[-$n,-1]}
   done
 }
@@ -246,14 +246,18 @@ sort() {
   [[ $key == *,* ]] && key=\${key%%,*}
   key=\${key%%[^0-9]*}
   local -a lines
-  local f
+  local f _stdin
   for f in $args; do lines+=("\${(@f)$(<$f)}"); done
+  if (( !\${#args} )); then
+    IFS= read -r -d '' _stdin
+    lines=("\${(@f)_stdin}")
+  fi
   if (( key > 0 )); then
     # Extract field $key (whitespace-delimited) for sorting, then sort
-    local -a keyed
+    local -a keyed words
     local line
     for line in "\${(@)lines}"; do
-      local -a words=(\${(z)line})
+      words=(\${(z)line})
       keyed+=("\${words[$key]:-}	$line")
     done
     if   (( num && rev )); then keyed=("\${(@On)keyed}")
@@ -283,8 +287,13 @@ uniq() {
   local -a args
   for a; do [[ $a != -* ]] && args+=($a); done
   local -a lines
-  (( \${#args} )) && lines=("\${(@f)$(<$args[1])}")
-  local prev line first=1
+  local prev line first=1 _stdin
+  if (( \${#args} )); then
+    lines=("\${(@f)$(<$args[1])}")
+  else
+    IFS= read -r -d '' _stdin
+    lines=("\${(@f)_stdin}")
+  fi
   for line in "\${(@)lines}"; do
     if (( first )) || [[ $line != $prev ]]; then print -- "$line"; prev=$line; first=0; fi
   done
