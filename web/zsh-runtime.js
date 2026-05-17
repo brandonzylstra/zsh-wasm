@@ -131,13 +131,24 @@ tail() {
   done
 }
 grep() {
-  local _gi=0 _gv=0 _gn=0 _gc=0 pat _src line _cnt _num _hit _stdin
-  local -a lines _srcs
+  local _gi=0 _gv=0 _gn=0 _gc=0 _ga=0 _gb=0 pat _src line _cnt _num _hit _stdin
+  local _i _from _to _last_end
+  local -a lines _srcs _matched
   while [[ \${1-} == -* ]]; do
-    [[ $1 == *i* ]] && _gi=1
-    [[ $1 == *v* ]] && _gv=1
-    [[ $1 == *n* ]] && _gn=1
-    [[ $1 == *c* ]] && _gc=1
+    case $1 in
+      -A)  shift; _ga=$1 ;;
+      -A*) _ga=\${1#-A} ;;
+      -B)  shift; _gb=$1 ;;
+      -B*) _gb=\${1#-B} ;;
+      -C)  shift; _ga=$1; _gb=$1 ;;
+      -C*) _ga=\${1#-C}; _gb=\${1#-C} ;;
+      *)
+        [[ $1 == *i* ]] && _gi=1
+        [[ $1 == *v* ]] && _gv=1
+        [[ $1 == *n* ]] && _gn=1
+        [[ $1 == *c* ]] && _gc=1
+        ;;
+    esac
     shift
   done
   pat=$1; shift
@@ -150,20 +161,49 @@ grep() {
       lines=("\${(@f)$(<$_src)}")
     fi
     _cnt=0; _num=0
-    for line in "\${(@)lines}"; do
-      (( _num++ ))
-      _hit=0
-      if (( _gi )); then [[ \${line:l} =~ \${pat:l} ]] && _hit=1
-      else               [[ $line =~ $pat ]]            && _hit=1
-      fi
-      (( _gv )) && (( _hit = !_hit ))
-      if (( _hit )); then
-        (( _cnt++ ))
-        if (( !_gc )); then
-          (( _gn )) && print -- "$_num:$line" || print -- "$line"
+    if (( _ga || _gb )); then
+      _matched=(); _num=0
+      for line in "\${(@)lines}"; do
+        (( _num++ ))
+        _hit=0
+        if (( _gi )); then [[ \${line:l} =~ \${pat:l} ]] && _hit=1
+        else               [[ $line =~ $pat ]]            && _hit=1
         fi
+        (( _gv )) && (( _hit = !_hit ))
+        (( _hit )) && _matched+=($_num)
+      done
+      _cnt=\${#_matched}
+      if (( !_gc )); then
+        _last_end=0
+        for _num in "\${(@)_matched}"; do
+          _from=$(( _num - _gb ))
+          (( _from < 1 )) && _from=1
+          _to=$(( _num + _ga ))
+          (( _to > \${#lines} )) && _to=\${#lines}
+          (( _last_end > 0 && _from > _last_end + 1 )) && print -- '--'
+          (( _from <= _last_end )) && _from=$(( _last_end + 1 ))
+          for (( _i = _from; _i <= _to; _i++ )); do
+            (( _gn )) && print -- "$_i:\${lines[$_i]}" || print -- "\${lines[$_i]}"
+          done
+          _last_end=$_to
+        done
       fi
-    done
+    else
+      for line in "\${(@)lines}"; do
+        (( _num++ ))
+        _hit=0
+        if (( _gi )); then [[ \${line:l} =~ \${pat:l} ]] && _hit=1
+        else               [[ $line =~ $pat ]]            && _hit=1
+        fi
+        (( _gv )) && (( _hit = !_hit ))
+        if (( _hit )); then
+          (( _cnt++ ))
+          if (( !_gc )); then
+            (( _gn )) && print -- "$_num:$line" || print -- "$line"
+          fi
+        fi
+      done
+    fi
     (( _gc )) && print -- $_cnt
   done
 }
