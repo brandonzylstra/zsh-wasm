@@ -137,7 +137,7 @@ tail() {
   fi
 }
 grep() {
-  local _gi=0 _gv=0 _gn=0 _gc=0 _ga=0 _gb=0 _gr=0 _gl=0 _go=0 _gm=0 _gH=0
+  local _gi=0 _gv=0 _gn=0 _gc=0 _ga=0 _gb=0 _gr=0 _gl=0 _go=0 _gm=0 _gH=0 _gq=0 _gw=0 _any_hit=0
   local pat _src line _cnt _num _hit _stdin _pfx _rest _rest_lc _match_out _file_hit _show_fname
   local _i _from _to _last_end
   local -a lines _srcs _matched _ge
@@ -163,12 +163,15 @@ grep() {
         [[ $1 == *[rR]* ]] && _gr=1
         [[ $1 == *l* ]] && _gl=1
         [[ $1 == *o* ]] && _go=1
+        [[ $1 == *q* ]] && _gq=1
+        [[ $1 == *w* ]] && _gw=1
         [[ $1 == *h* ]] && _gH=-1
         ;;
     esac
     shift
   done
   (( \${#_ge} )) && pat=\${(j:|:)_ge} || { pat=$1; shift }
+  (( _gw )) && pat="(^|[^[:alnum:]_])(\${pat})([^[:alnum:]_]|$)"
   if (( _gr )); then
     (( $# )) && _srcs=("$@") || _srcs=('.')
     local -a _exp=()
@@ -205,9 +208,10 @@ grep() {
         (( _gv )) && (( _hit = !_hit ))
         if (( _hit )); then _matched+=($_num); _file_hit=1; fi
         (( _gm && \${#_matched} >= _gm )) && break
+        (( _gq && _file_hit )) && break
       done
       _cnt=\${#_matched}
-      if (( !_gc && !_gl )); then
+      if (( !_gc && !_gl && !_gq )); then
         _last_end=0
         for _num in "\${(@)_matched}"; do
           _from=$(( _num - _gb ))
@@ -234,7 +238,7 @@ grep() {
         (( _gv )) && (( _hit = !_hit ))
         if (( _hit )); then
           (( _cnt++ )); _file_hit=1
-          if (( !_gc && !_gl )); then
+          if (( !_gc && !_gl && !_gq )); then
             if (( _go )); then
               _rest=$line; _rest_lc=\${line:l}
               while true; do
@@ -242,12 +246,19 @@ grep() {
                 else               [[ $_rest    =~ $pat      ]] || break
                 fi
                 [[ -z $MATCH ]] && break
-                _match_out=\${_rest[$MBEGIN,$MEND]}
+                if (( _gw )); then _match_out=\${match[2]}
+                else               _match_out=\${_rest[$MBEGIN,$MEND]}
+                fi
                 if (( _gn )); then print -- "\${_pfx}\${_num}:\${_match_out}"
                 else               print -- "\${_pfx}\${_match_out}"
                 fi
-                _rest=\${_rest[$((MEND + 1)),-1]}
-                _rest_lc=\${_rest_lc[$((MEND + 1)),-1]}
+                if (( _gw )); then
+                  _rest=\${_rest[$((mend[2] + 1)),-1]}
+                  _rest_lc=\${_rest_lc[$((mend[2] + 1)),-1]}
+                else
+                  _rest=\${_rest[$((MEND + 1)),-1]}
+                  _rest_lc=\${_rest_lc[$((MEND + 1)),-1]}
+                fi
               done
             else
               if (( _gn )); then print -- "\${_pfx}\${_num}:$line"
@@ -256,12 +267,16 @@ grep() {
             fi
           fi
           (( _gm && _cnt >= _gm )) && break
+          (( _gq )) && break
         fi
       done
     fi
-    (( _gc )) && print -- "\${_pfx}$_cnt"
-    (( _gl && _file_hit )) && print -- "$_src"
+    (( _gc && !_gq )) && print -- "\${_pfx}$_cnt"
+    (( _gl && _file_hit && !_gq )) && print -- "$_src"
+    if (( _file_hit )); then _any_hit=1; fi
+    (( _gq && _any_hit )) && break
   done
+  return $(( !_any_hit ))
 }
 _ls_modestr() {
   local m=$1 t p=''

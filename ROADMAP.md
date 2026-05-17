@@ -61,7 +61,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 212 test cases (211 passing, 1 `knownFail`) and compares actual vs. expected output:
+`web/test.html` runs 218 test cases (217 passing, 1 `knownFail`) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
