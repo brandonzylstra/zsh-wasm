@@ -200,24 +200,49 @@ date() {
   strftime $fmt $EPOCHSECONDS
 }
 sort() {
-  local rev=0 num=0 uniq_flag=0
+  local rev=0 num=0 uniq_flag=0 key=0
   local -a args
+  local skip_next=0
   for a; do
+    if (( skip_next )); then key=$a; skip_next=0; continue; fi
     if [[ $a == -* ]]; then
       [[ $a == *r* ]] && rev=1
       [[ $a == *n* ]] && num=1
       [[ $a == *u* ]] && uniq_flag=1
+      if [[ $a == -k ]]; then skip_next=1
+      elif [[ $a == -k* ]]; then key=\${a#-k}
+      fi
     else
       args+=($a)
     fi
   done
+  # Strip ,end and flags from key spec (e.g. "2,2n" -> "2")
+  [[ $key == *,* ]] && key=\${key%%,*}
+  key=\${key%%[^0-9]*}
   local -a lines
   local f
   for f in $args; do lines+=("\${(@f)$(<$f)}"); done
-  if   (( num && rev )); then lines=("\${(@On)lines}")
-  elif (( num ));        then lines=("\${(@on)lines}")
-  elif (( rev ));        then lines=("\${(@O)lines}")
-  else                        lines=("\${(@o)lines}")
+  if (( key > 0 )); then
+    # Extract field $key (whitespace-delimited) for sorting, then sort
+    local -a keyed
+    local line
+    for line in "\${(@)lines}"; do
+      local -a words=(\${(z)line})
+      keyed+=("\${words[$key]:-}	$line")
+    done
+    if   (( num && rev )); then keyed=("\${(@On)keyed}")
+    elif (( num ));        then keyed=("\${(@on)keyed}")
+    elif (( rev ));        then keyed=("\${(@O)keyed}")
+    else                        keyed=("\${(@o)keyed}")
+    fi
+    lines=()
+    for line in "\${(@)keyed}"; do lines+=("\${line#*	}"); done
+  else
+    if   (( num && rev )); then lines=("\${(@On)lines}")
+    elif (( num ));        then lines=("\${(@on)lines}")
+    elif (( rev ));        then lines=("\${(@O)lines}")
+    else                        lines=("\${(@o)lines}")
+    fi
   fi
   if (( uniq_flag )); then
     local -a u; local prev; local first=1
@@ -239,7 +264,7 @@ uniq() {
   done
 }
 cut() {
-  local delim=$'\\t' fields=''
+  local delim=$'\\t' fields='' chars=''
   local -a args
   while (( $# )); do
     case $1 in
@@ -247,38 +272,55 @@ cut() {
       -d*) delim=\${1#-d} ;;
       -f)  shift; fields=$1 ;;
       -f*) fields=\${1#-f} ;;
+      -c)  shift; chars=$1 ;;
+      -c*) chars=\${1#-c} ;;
       -*)  ;;
       *)   args+=($1) ;;
     esac
     shift
   done
+  local f line cs ss ee result fspec s e _jo _jf _o
   local sep=$'\\x01'
-  local f
+  local -a lines parts out
   for f in $args; do
-    local -a lines=("\${(@f)$(<$f)}")
-    local line
-    local -a out
-    local fspec
+    lines=("\${(@f)$(<$f)}")
     for line in "\${(@)lines}"; do
-      local -a parts=("\${(@ps:\\x01:)\${line//\$delim/\$sep}}")
-      out=()
-      for fspec in \${(s:,:)fields}; do
-        if [[ $fspec == *-* ]]; then
-          local s=\${fspec%-*} e=\${fspec#*-}
-          [[ -z $s ]] && s=1
-          [[ -z $e ]] && e=\${#parts}
-          out+=("\${(@)parts[$s,$e]}")
-        else
-          out+=("\${parts[$fspec]}")
-        fi
-      done
-      local _jo='' _jf=1
-      for _o in "\${(@)out}"; do
-        if (( _jf )); then _jo=$_o _jf=0
-        else               _jo+=\$delim$_o
-        fi
-      done
-      print -- "$_jo"
+      if [[ -n $chars ]]; then
+        result=''
+        for cs in \${(s:,:)chars}; do
+          if [[ $cs == *-* ]]; then
+            ss=\${cs%-*}
+            ee=\${cs#*-}
+            [[ -z $ss ]] && ss=1
+            [[ -z $ee ]] && ee=\${#line}
+            result+=\${line[$ss,$ee]}
+          else
+            result+=\${line[$cs]}
+          fi
+        done
+        print -- "$result"
+      else
+        parts=("\${(@ps:\\x01:)\${line//\$delim/\$sep}}")
+        out=()
+        for fspec in \${(s:,:)fields}; do
+          if [[ $fspec == *-* ]]; then
+            s=\${fspec%-*}
+            e=\${fspec#*-}
+            [[ -z $s ]] && s=1
+            [[ -z $e ]] && e=\${#parts}
+            out+=("\${(@)parts[$s,$e]}")
+          else
+            out+=("\${parts[$fspec]}")
+          fi
+        done
+        _jo='' _jf=1
+        for _o in "\${(@)out}"; do
+          if (( _jf )); then _jo=$_o _jf=0
+          else               _jo+=\$delim$_o
+          fi
+        done
+        print -- "$_jo"
+      fi
     done
   done
 }
@@ -327,6 +369,59 @@ dirname() {
   p=\${p%/*}
   print -- "\${p:-/}"
 }
+tee() {
+  local append=0
+  local -a files
+  for a; do
+    [[ $a == -a ]] && append=1 && continue
+    [[ $a == -* ]] && continue
+    files+=($a)
+  done
+  local content
+  IFS= read -r -d '' content
+  local f
+  for f in $files; do
+    if (( append )); then print -rn -- "$content" >> $f
+    else             print -rn -- "$content" >  $f
+    fi
+  done
+  print -rn -- "$content"
+}
+seq() {
+  local first=1 step=1 last
+  case $# in
+    1) last=$1 ;;
+    2) first=$1; last=$2 ;;
+    3) first=$1; step=$2; last=$3 ;;
+    *) print -u2 "seq: wrong number of arguments"; return 1 ;;
+  esac
+  local i
+  if (( step > 0 )); then
+    for (( i=first; i<=last; i+=step )); do print -- $i; done
+  elif (( step < 0 )); then
+    for (( i=first; i>=last; i+=step )); do print -- $i; done
+  fi
+}
+mktemp() {
+  local makedirs=0
+  local template='/tmp/tmp.XXXXXX'
+  for a; do
+    [[ $a == -d ]] && makedirs=1 && continue
+    [[ $a == -* ]] && continue
+    template=$a
+  done
+  local base=$template nX=0
+  while [[ $base == *X ]]; do base=\${base%X}; (( nX++ )); done
+  local rand
+  rand=$(printf '%012d' $(( (RANDOM << 15 | RANDOM) & 0x7FFFFFFF )))
+  rand=\${rand[-$nX,-1]}
+  local result=\${base}\${rand}
+  if (( makedirs )); then mkdir -p "$result"
+  else touch "$result"
+  fi
+  print -- "$result"
+}
+sleep() { : }
 rm() {
   local force=0 recursive=0
   local -a targets

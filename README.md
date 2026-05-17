@@ -255,15 +255,15 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-119 test cases cover: shell builtins (echo, printf, if, for, while, case, function,
+154 test cases pass (159 total; 5 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
 cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`-e`,
 `-i ''` in-place, line-addressed print), awk (field splitting, pattern matching,
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
-`-F` separator, multi-file), basename/dirname path manipulation, rm (file deletion,
-`-f`, `-rf` recursive), string operations (length, slice, replace, strip-prefix/suffix,
+`-F` separator, multi-file), basename/dirname path manipulation, rm/rmdir, tee,
+seq, mktemp, sleep, sort `-k` field sort, cut `-c` character positions, string operations (length, slice, replace, strip-prefix/suffix,
 `${var:-default}`, upper/lower case), brace expansion, array/associative-array
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
 `$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, `zstat`,
@@ -396,8 +396,14 @@ most common ones:
 | `basename`| suffix arg           | strips directory and optional suffix (`basename /a/b.txt .txt` → `b`) |
 | `dirname` | —                    | strips last component (`dirname /a/b` → `/a`; `dirname foo` → `.`) |
 | `rm`      | `-f` `-r`/`-rf`      | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
+| `tee`     | `-a`                 | reads all stdin, writes to file(s) and stdout; use with `< file` or `<<< str`, not pipes |
+| `seq`     | `N`, `start N`, `start step N` | integer sequence; `seq 0 2 10` → `0 2 4 6 8 10` |
+| `mktemp`  | `-d`, template       | creates temp file or dir; replaces trailing `X`'s with random digits |
+| `sleep`   | —                    | no-op in wasm (synchronous environment); prevents "command not found" |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
+
+Note: `sort` supports `-k N` (sort by Nth whitespace-delimited field); `cut` supports `-c N` and `-c N-M` (character positions) in addition to the field-based `-f` flag.
 
 When built with `bin/build --with-sed --with-awk`, compiled-in builtins are also available:
 

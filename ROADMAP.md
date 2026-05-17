@@ -24,20 +24,24 @@ Zero impact on wasm binary size — loader change only.
 
 ---
 
-### Additional shims: sort, uniq, cut, tr, date, basename, dirname, rm ✓ done
+### Additional shims: sort, uniq, cut, tr, date, basename, dirname, rm, tee, seq, mktemp, sleep ✓ done
 
 Implemented as pure zsh functions in `BUILTINS_PREAMBLE`. No Web Workers needed.
 
 | Shim       | Approach |
 |------------|----------|
 | `date`     | `strftime` from `zsh/datetime`; `+FORMAT` arg supported |
-| `sort`     | `${(o)}` / `${(O)}` / `${(on)}` array flags for alpha/reverse/numeric sort |
+| `sort`     | `${(o)}` / `${(O)}` / `${(on)}` array flags; `-k N` field sort via tab-prefixed schwartzian transform |
 | `uniq`     | consecutive-duplicate removal with loop |
-| `cut`      | `\x01` as internal separator; field ranges (`1-3`, `2,4`) supported |
+| `cut`      | `-f` field ranges with `\x01` separator; `-c` character positions via `${line[s,e]}` |
 | `tr`       | `${(U)}`/`${(L)}` for `a-z`↔`A-Z`; char-by-char loop for arbitrary mappings |
 | `basename` | parameter expansion (`##*/`, `%suffix`) |
 | `dirname`  | parameter expansion (`%/*`), handles root and relative paths |
 | `rm`       | delegates to `zf_rm`/`zf_rmdir` (from `zsh/files`); supports `-f`, `-r`, `-rf` |
+| `tee`      | drains stdin with `read -d ''`; writes to file(s) and stdout; supports `-a` |
+| `seq`      | arithmetic for-loop; 1, 2, or 3 arg forms |
+| `mktemp`   | counts trailing X's, generates random digits, calls `touch`/`mkdir -p` |
+| `sleep`    | no-op (wasm is synchronous; prevents "command not found" errors) |
 
 ---
 
@@ -57,20 +61,28 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 119 test cases and compares actual vs. expected output:
+`web/test.html` runs 159 test cases (154 passing, 5 `knownFail` documenting known limitations) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
 Covers: shell builtins (echo, printf, if, for, while, case, function), all shims
 (touch, cat, cp, mv, wc, head, tail, grep, ls, sort, uniq, cut, tr, date,
-basename, dirname, rm), glob patterns, recursive globs, module loading
-(`zsh/datetime`), stdin, exit codes, POSIX regex (`=~`, grep anchors,
-alternation, character classes, `+`, `?`, `{n}` quantifiers), grep across
-multiple files, sort combined flags (`-rn`), cut open-ended field ranges
-(`-f3-`, `-f-2`), wc across multiple files, sed (substitution, global replace,
-deletion, `-n`/`-e`, address ranges, in-place editing), awk (field splitting,
-`-F`, `NR`/`NF`/`FNR`, `sub`/`gsub`, `length`, `printf`, user variables), and
-string/parameter operations (`${#s}`, `${s:n:m}`, defaults, local scope).
+basename, dirname, rm, tee, seq, mktemp, sleep), glob patterns, recursive globs,
+module loading (`zsh/datetime`), stdin, exit codes, POSIX regex (`=~`, capture
+groups via `$match`, grep anchors, alternation, character classes, `+`, `?`,
+`{n}` quantifiers), grep across multiple files, sort `-rn`/`-k`, cut field
+ranges and character positions, wc across multiple files, sed (substitution,
+global, deletion, `-n`/`-e`, address ranges, in-place editing, back-references),
+awk (field splitting, `-F`, `NR`/`NF`/`FNR`, arrays, user-defined functions,
+`substr`/`split`, `sub`/`gsub`, `length`, `printf`, user variables), here
+strings (`<<<`), heredocs, `read -A`, `typeset -i`, arithmetic (modulo,
+negative), `file-test` operators (`-f`/`-d`/`-e`/`-s`), parameter join with
+custom separator, and string/parameter operations.
+
+Known limitations (documented as `knownFail`): subshells require fork (fail
+silently), pipes between commands fail, grep shim only reads file args (not
+stdin), grep `-A`/`-B` context flags unimplemented, `zsh/mathfunc` not compiled
+into default wasm binary.
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
