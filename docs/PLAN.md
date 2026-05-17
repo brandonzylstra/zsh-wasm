@@ -516,8 +516,11 @@ than a bloat-or-skip binary decision.
 **Checklist:**
 - [ ] Add examples showcasing sed, awk, grep (once compiled)
 - [ ] Add an example using `bc` for floating-point math
-- [ ] Add a "what doesn't work" section (pipes, subshells)
-- [ ] Add syntax highlighting for zsh code in the example editor
+- [x] Add a "what doesn't work" message for pipes/subshells — `runZshScript` now detects
+      ` | ` patterns and, when the script produces zero output, injects a helpful stderr
+      message: "zsh-wasm: pipes require fork(), which is not available in WebAssembly."
+      Test `pipe-helpful-error` verifies this. (Still TODO: visible notice in demo UI.)
+- [x] Add syntax highlighting for zsh code in the example editor
 
 ---
 

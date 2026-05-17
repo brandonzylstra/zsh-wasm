@@ -567,6 +567,12 @@ const tests = [
       script: "echo hello | grep hello",
       expected: 'hello',
       knownFail: true },
+    // pipe fork failure produces a helpful diagnostic, not a raw system error
+    { name: 'pipe-helpful-error',
+      script: "echo hello | grep hello",
+      expected: 'zsh-wasm:',
+      checkStderr: true,
+      matchIncludes: true },
     { name: 'grep-stdin',
       script: "grep hello <<< 'hello world'",
       expected: 'hello world' },
@@ -802,11 +808,11 @@ async function runTest(t, tr) {
         result = { stdout: '', stderr: String(e), exitCode: 1 };
     }
 
-    const actual = result.stdout.trim();
+    const actual = t.checkStderr ? result.stderr : result.stdout.trim();
     let pass, expectedStr;
     if (t.expected !== undefined) {
         expectedStr = t.expected;
-        pass = actual === t.expected.trim();
+        pass = t.matchIncludes ? actual.includes(t.expected) : actual === t.expected.trim();
     } else {
         expectedStr = `contains: ${t.expected_contains}`;
         pass = actual.includes(t.expected_contains);

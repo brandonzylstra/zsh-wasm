@@ -478,12 +478,26 @@ rm() {
 
 // Runs a zsh script off the main thread via a Web Worker.
 // Returns { stdout, stderr } as plain strings.
+// Detect pipeline operator (not || and not |& or |>).
+// Used to emit a helpful message when a forked pipeline silently produces no output.
+function hasPipelineOp(src) {
+    return / \| /.test(src);
+}
+
 export function runZshScript(src, { stdin = null, fs = null } = {}) {
     return new Promise((resolve, reject) => {
         const worker = new Worker(new URL('./zsh-worker.js', import.meta.url));
         worker.onmessage = ({ data }) => {
             worker.terminate();
-            resolve(data);
+            let { stdout, stderr, exitCode } = data;
+            // When a pipeline produces no output at all, zsh-wasm silently swallows
+            // the fork() failure. Emit a helpful diagnostic so users know what happened.
+            if (!stdout && !stderr && hasPipelineOp(src)) {
+                stderr = 'zsh-wasm: pipes require fork(), which is not available in WebAssembly.\n' +
+                         '  Use here-strings or heredocs instead of pipelines.\n' +
+                         "  Example: bc <<< '1+1'  (not: echo '1+1' | bc)";
+            }
+            resolve({ stdout, stderr, exitCode });
         };
         worker.onerror = (e) => {
             worker.terminate();
