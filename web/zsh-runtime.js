@@ -448,6 +448,66 @@ mktemp() {
   print -- "$result"
 }
 sleep() { : }
+find() {
+  local _dir='.' _type='' _name='' _maxdepth='' _newer=''
+  local _dir_set=0 _f _d _rel _depth _nm _newer_mtime=0
+  local -a _extra_dirs _items _alldirs _parts
+  local -A _nstat _fstat
+  while (( \$# )) && [[ \$1 != -* ]]; do
+    if (( !_dir_set )); then _dir=\$1; _dir_set=1
+    else _extra_dirs+=(\$1)
+    fi
+    shift
+  done
+  while (( \$# )); do
+    case \$1 in
+      -name)     shift; _name=\$1 ;;
+      -type)     shift; _type=\$1 ;;
+      -maxdepth) shift; _maxdepth=\$1 ;;
+      -newer)    shift; _newer=\$1 ;;
+      '!' | '(' | ')' | -print | -print0 | -prune | -follow) ;;
+      -*) ;;
+    esac
+    shift
+  done
+  if [[ -n \$_newer ]]; then
+    zstat -H _nstat \$_newer 2>/dev/null && _newer_mtime=\${_nstat[mtime]}
+  fi
+  _alldirs=(\$_dir \${_extra_dirs[@]})
+  for _d in \${_alldirs[@]}; do
+    if [[ ! -e \$_d ]]; then
+      print -u2 "find: '\$_d': No such file or directory"
+      continue
+    fi
+    _items=(\$_d \$_d/**/*(ND))
+    for _f in \${_items[@]}; do
+      if [[ -n \$_maxdepth ]]; then
+        if [[ \$_f == \$_d ]]; then
+          _depth=0
+        else
+          _rel=\${_f#\${_d}/}
+          _parts=(\${(s:/:)_rel})
+          _depth=\${#_parts}
+        fi
+        (( _depth > _maxdepth )) && continue
+      fi
+      if [[ -n \$_type ]]; then
+        [[ \$_type == f && ! -f \$_f ]] && continue
+        [[ \$_type == d && ! -d \$_f ]] && continue
+        [[ \$_type == l && ! -L \$_f ]] && continue
+      fi
+      if [[ -n \$_name ]]; then
+        _nm=\${_f:t}
+        [[ \$_nm != \${~_name} ]] && continue
+      fi
+      if [[ -n \$_newer ]]; then
+        zstat -H _fstat \$_f 2>/dev/null || continue
+        (( \${_fstat[mtime]} <= _newer_mtime )) && continue
+      fi
+      print -- \$_f
+    done
+  done
+}
 rm() {
   local force=0 recursive=0
   local -a targets

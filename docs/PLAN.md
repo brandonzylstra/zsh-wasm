@@ -286,16 +286,23 @@ of portable C. No yacc/flex, explicitly designed for portability.
 
 ## 4. `find` shim
 
-**Status:** Not yet shimmed. `find` is commonly used but a full implementation
-is impractical as a zsh shim. A partial shim covering ~80% of real-world usage
-is feasible.
+**Status:** Complete. Shim in `BUILTINS_PREAMBLE` in `web/zsh-runtime.js`.
 
 **Checklist:**
-- [ ] Implement `find DIR -name PATTERN [-type f|d]` → zsh glob
-- [ ] Implement `find DIR -maxdepth N`
-- [ ] Implement `find DIR -newer FILE` (uses `zstat` mtime comparison)
-- [ ] Add tests for each form
-- [ ] Document which `find` flags are unsupported
+- [x] Implement `find DIR -name PATTERN [-type f|d/l]` → zsh glob
+- [x] Implement `find DIR -maxdepth N`
+- [x] Implement `find DIR -newer FILE` (uses `zstat` mtime comparison; untested —
+      wasm memfs doesn't allow setting mtimes so a reliable test isn't feasible)
+- [x] Add tests: find-basic, find-name, find-type-f, find-type-d, find-maxdepth,
+      find-maxdepth0, find-name-type (7 tests; 171/174 passing)
+- [x] Document which `find` flags are unsupported (README shim table)
+
+**Key implementation notes:**
+- Two-phase arg parsing: leading non-`-` args are start paths, then options
+- Start dir is prepended manually (`_items=($_d $_d/**/*(ND))`) since `**/*` doesn't include the root
+- Depth counted with `_parts=(${(s:/:)_rel}); _depth=${#_parts}` — nested `${#${...//...}}` inside `$((...))` silently misbehaves in this wasm zsh build
+- All locals declared at function top (avoids the zsh-wasm local-in-loop stdout bug)
+- Known limitation: `-name` patterns don't match dotfiles unless the pattern starts with `.` (zsh `[[ x == pat ]]` doesn't match dotfiles with `*`)
 
 **Core implementation:**
 

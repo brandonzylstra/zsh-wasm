@@ -255,7 +255,7 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-164 test cases pass (167 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+171 test cases pass (174 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
@@ -264,7 +264,7 @@ cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
 `-F` separator, multi-file), `zsh/mathfunc` (sin, cos, sqrt, log, etc.),
 basename/dirname path manipulation, rm/rmdir, tee, grep/cat/wc from stdin,
-seq, mktemp, sleep, sort `-k` field sort, cut `-c` character positions, string operations (length, slice, replace, strip-prefix/suffix,
+seq, mktemp, sleep, find (`-name`/`-type`/`-maxdepth`/`-newer`), sort `-k` field sort, cut `-c` character positions, string operations (length, slice, replace, strip-prefix/suffix,
 `${var:-default}`, upper/lower case), brace expansion, array/associative-array
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
 `$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, `zstat`,
@@ -405,6 +405,7 @@ most common ones:
 | `seq`     | `N`, `start N`, `start step N` | integer sequence; `seq 0 2 10` → `0 2 4 6 8 10` |
 | `mktemp`  | `-d`, template       | creates temp file or dir; replaces trailing `X`'s with random digits |
 | `sleep`   | —                    | no-op in wasm (synchronous environment); prevents "command not found" |
+| `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
 

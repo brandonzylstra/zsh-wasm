@@ -684,6 +684,28 @@ const tests = [
     { name: 'bc-heredoc',
       script: "bc << 'EOF'\nscale=2\n10/3\nEOF",
       expected: '3.33' },
+    // find shim
+    { name: 'find-basic',
+      script: "mkdir -p /tmp/ftb/sub\necho hi > /tmp/ftb/a.txt\necho hi > /tmp/ftb/b.sh\necho hi > /tmp/ftb/sub/c.txt\nfind /tmp/ftb",
+      expected: '/tmp/ftb\n/tmp/ftb/a.txt\n/tmp/ftb/b.sh\n/tmp/ftb/sub\n/tmp/ftb/sub/c.txt' },
+    { name: 'find-name',
+      script: "mkdir -p /tmp/ftn/sub\necho hi > /tmp/ftn/a.txt\necho hi > /tmp/ftn/b.sh\necho hi > /tmp/ftn/sub/c.txt\nfind /tmp/ftn -name '*.txt'",
+      expected: '/tmp/ftn/a.txt\n/tmp/ftn/sub/c.txt' },
+    { name: 'find-type-f',
+      script: "mkdir -p /tmp/fttf/sub\necho hi > /tmp/fttf/a.txt\nfind /tmp/fttf -type f",
+      expected: '/tmp/fttf/a.txt' },
+    { name: 'find-type-d',
+      script: "mkdir -p /tmp/fttd/sub\necho hi > /tmp/fttd/a.txt\nfind /tmp/fttd -type d",
+      expected: '/tmp/fttd\n/tmp/fttd/sub' },
+    { name: 'find-maxdepth',
+      script: "mkdir -p /tmp/ftmd/sub\necho hi > /tmp/ftmd/a.txt\necho hi > /tmp/ftmd/sub/b.txt\nfind /tmp/ftmd -maxdepth 1",
+      expected: '/tmp/ftmd\n/tmp/ftmd/a.txt\n/tmp/ftmd/sub' },
+    { name: 'find-maxdepth0',
+      script: "mkdir -p /tmp/ftmd0\nfind /tmp/ftmd0 -maxdepth 0",
+      expected: '/tmp/ftmd0' },
+    { name: 'find-name-type',
+      script: "mkdir -p /tmp/ftnt/sub\necho hi > /tmp/ftnt/a.txt\necho hi > /tmp/ftnt/sub/b.txt\nmkdir -p /tmp/ftnt/notes.txt\nfind /tmp/ftnt -name '*.txt' -type f",
+      expected: '/tmp/ftnt/a.txt\n/tmp/ftnt/sub/b.txt' },
 ];
 
 const tbody = document.getElementById('results');
