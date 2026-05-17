@@ -96,10 +96,15 @@ if (( WITH_SED )); then
     # Ensure zsh/sed is in config.modules; add with link=no as the default
     # state (the patch below will then flip it to link=static for this build).
     if ! grep -q '^name=zsh/sed ' config.modules; then
-        # Insert after zsh/net/socket line, preserving alphabetical order
-        sed -i '' '/^name=zsh\/net\/socket /a\
-name=zsh/sed modfile=Src/Modules/sed.mdd link=no auto=yes load=no' \
-            config.modules
+        python3 -c "
+lines = open('config.modules').readlines()
+out = []
+for line in lines:
+    out.append(line)
+    if line.startswith('name=zsh/net/socket '):
+        out.append('name=zsh/sed modfile=Src/Modules/sed.mdd link=no auto=yes load=no\n')
+open('config.modules', 'w').write(''.join(out))
+"
     fi
     sed -i '' -E \
         -e 's/^(name=zsh\/sed .*)link=no/\1link=static/' \
@@ -213,9 +218,15 @@ if (( WITH_AWK )); then
     cp "$AWK_SRC/awk.mdd" "$ROOT/zsh-5.9/Src/Modules/awk.mdd"
 
     if ! grep -q '^name=zsh/awk ' config.modules; then
-        sed -i '' '/^name=zsh\/net\/socket /a\
-name=zsh/awk modfile=Src/Modules/awk.mdd link=no auto=yes load=no' \
-            config.modules
+        python3 -c "
+lines = open('config.modules').readlines()
+out = []
+for line in lines:
+    out.append(line)
+    if line.startswith('name=zsh/net/socket '):
+        out.append('name=zsh/awk modfile=Src/Modules/awk.mdd link=no auto=yes load=no\n')
+open('config.modules', 'w').write(''.join(out))
+"
     fi
     sed -i '' -E \
         -e 's/^(name=zsh\/awk .*)link=no/\1link=static/' \
