@@ -48,10 +48,20 @@ export const IDBFS_MOUNT = '/home/user';
 
 export const BUILTINS_PREAMBLE = `\
 touch() { local f; for f; do : >> "$f"; done }
-cat()   { local f; for f; do print -r -- "$(<$f)"; done }
+cat() {
+  local f
+  if (( $# == 0 )); then
+    local _stdin
+    IFS= read -r -d '' _stdin
+    print -rn -- "$_stdin"
+  else
+    for f; do print -r -- "$(<$f)"; done
+  fi
+}
 wc() {
-  local do_l=0 do_w=0 do_c=0 default=1
-  local -a args
+  local do_l=0 do_w=0 do_c=0 default=1 f content label out nw _iw j ch
+  local -a args _wl
+  local -A _wst
   for a; do
     if [[ $a == -* ]]; then
       default=0
@@ -63,16 +73,24 @@ wc() {
     fi
   done
   (( default )) && do_l=1 do_w=1 do_c=1
-  local f
-  for f in $args; do
-    local content=$(<$f)
-    local out=''
+  local -a sources
+  (( \${#args} )) && sources=("\${(@)args}") || sources=('-')
+  for f in "\${(@)sources}"; do
+    if [[ $f == - ]]; then
+      IFS= read -r -d '' content
+      content=\${content%$'\n'}
+      label=''
+    else
+      content=$(<$f)
+      label=" $f"
+    fi
+    out=''
     if (( do_l )); then
-      local -a _wl=("\${(@f)content}")
+      _wl=("\${(@f)content}")
       out+=" \${#_wl}"
     fi
     if (( do_w )); then
-      local nw=0 _iw=0 j ch
+      nw=0; _iw=0
       for (( j=1; j<=\${#content}; j++ )); do
         ch=\${content[$j]}
         if [[ $ch == [[:space:]] ]]; then _iw=0
@@ -82,11 +100,14 @@ wc() {
       out+=" $nw"
     fi
     if (( do_c )); then
-      local -A _wst
-      zstat -H _wst "$f"
-      out+=" \${_wst[size]}"
+      if [[ $f == - ]]; then
+        out+=" \${#content}"
+      else
+        zstat -H _wst "$f"
+        out+=" \${_wst[size]}"
+      fi
     fi
-    print -- "\${out# } $f"
+    print -- "\${out# }\${label}"
   done
 }
 head() {
@@ -110,7 +131,8 @@ tail() {
   done
 }
 grep() {
-  local _gi=0 _gv=0 _gn=0 _gc=0
+  local _gi=0 _gv=0 _gn=0 _gc=0 pat _src line _cnt _num _hit _stdin
+  local -a lines _srcs
   while [[ \${1-} == -* ]]; do
     [[ $1 == *i* ]] && _gi=1
     [[ $1 == *v* ]] && _gv=1
@@ -118,17 +140,21 @@ grep() {
     [[ $1 == *c* ]] && _gc=1
     shift
   done
-  local pat=$1; shift
-  local f line _cnt _num _hit
-  local -a lines
-  for f; do
-    lines=("\${(@f)$(<$f)}")
-    _cnt=0 _num=0
+  pat=$1; shift
+  (( $# )) && _srcs=("$@") || _srcs=('-')
+  for _src in "\${(@)_srcs}"; do
+    if [[ $_src == - ]]; then
+      IFS= read -r -d '' _stdin
+      lines=("\${(@f)_stdin}")
+    else
+      lines=("\${(@f)$(<$_src)}")
+    fi
+    _cnt=0; _num=0
     for line in "\${(@)lines}"; do
       (( _num++ ))
       _hit=0
       if (( _gi )); then [[ \${line:l} =~ \${pat:l} ]] && _hit=1
-      else               [[ $line =~ $pat ]]           && _hit=1
+      else               [[ $line =~ $pat ]]            && _hit=1
       fi
       (( _gv )) && (( _hit = !_hit ))
       if (( _hit )); then

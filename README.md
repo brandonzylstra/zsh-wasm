@@ -255,14 +255,15 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-154 test cases pass (159 total; 5 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+158 test cases pass (161 total; 3 `knownFail` document expected limitations). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
 classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, sort combined flags,
 cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`-e`,
 `-i ''` in-place, line-addressed print), awk (field splitting, pattern matching,
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
-`-F` separator, multi-file), basename/dirname path manipulation, rm/rmdir, tee,
+`-F` separator, multi-file), `zsh/mathfunc` (sin, cos, sqrt, log, etc.),
+basename/dirname path manipulation, rm/rmdir, tee, grep/cat/wc from stdin,
 seq, mktemp, sleep, sort `-k` field sort, cut `-c` character positions, string operations (length, slice, replace, strip-prefix/suffix,
 `${var:-default}`, upper/lower case), brace expansion, array/associative-array
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,

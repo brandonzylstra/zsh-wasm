@@ -539,11 +539,9 @@ const tests = [
     { name: 'typeset-int',
       script: "typeset -i n=5; n+=3; echo $n",
       expected: '8' },
-    // knownFail: zsh/mathfunc not compiled into the wasm binary by default
     { name: 'zsh-mathfunc',
       script: "zmodload zsh/mathfunc; echo $(( int(sqrt(16)) ))",
-      expected: '4',
-      knownFail: true },
+      expected: '4' },
     // file test: -e (exists) and -s (non-empty)
     { name: 'file-test-e',
       script: "echo x > /tmp/fte.txt; [[ -e /tmp/fte.txt ]] && echo yes || echo no",
@@ -569,11 +567,15 @@ const tests = [
       script: "echo hello | grep hello",
       expected: 'hello',
       knownFail: true },
-    // knownFail: grep shim only reads from file args, not stdin
     { name: 'grep-stdin',
       script: "grep hello <<< 'hello world'",
-      expected: 'hello world',
-      knownFail: true },
+      expected: 'hello world' },
+    { name: 'cat-stdin',
+      script: "cat <<< 'hello world'",
+      expected: 'hello world' },
+    { name: 'wc-stdin',
+      script: "wc -l <<< 'hello world'",
+      expected: '1' },
     // sort: -k field sort
     { name: 'sort-k',
       script: "printf 'banana 2\\napple 1\\ncherry 3\\n' > /tmp/sk.txt\nsort -k2 /tmp/sk.txt",

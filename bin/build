@@ -69,8 +69,8 @@ echo "==> patching config.modules"
 sed -i '' -E \
     -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)link=static/\1link=no/' \
     -e 's/^(name=zsh\/(zle|compctl|complete|complist|computil|zleparameter) .*)load=yes/\1load=no/' \
-    -e 's/^(name=zsh\/(files|stat|regex) .*)link=no/\1link=static/' \
-    -e 's/^(name=zsh\/(files|stat|regex) .*)load=no/\1load=yes/' \
+    -e 's/^(name=zsh\/(files|stat|regex|mathfunc) .*)link=no/\1link=static/' \
+    -e 's/^(name=zsh\/(files|stat|regex|mathfunc) .*)load=no/\1load=yes/' \
     -e 's/^(name=zsh\/sed .*)link=static/\1link=no/' \
     -e 's/^(name=zsh\/sed .*)load=yes/\1load=no/' \
     -e 's/^(name=zsh\/awk .*)link=static/\1link=no/' \

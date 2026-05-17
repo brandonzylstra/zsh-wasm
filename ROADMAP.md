@@ -61,28 +61,27 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 159 test cases (154 passing, 5 `knownFail` documenting known limitations) and compares actual vs. expected output:
+`web/test.html` runs 161 test cases (158 passing, 3 `knownFail` documenting known limitations) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
 Covers: shell builtins (echo, printf, if, for, while, case, function), all shims
 (touch, cat, cp, mv, wc, head, tail, grep, ls, sort, uniq, cut, tr, date,
-basename, dirname, rm, tee, seq, mktemp, sleep), glob patterns, recursive globs,
-module loading (`zsh/datetime`), stdin, exit codes, POSIX regex (`=~`, capture
-groups via `$match`, grep anchors, alternation, character classes, `+`, `?`,
-`{n}` quantifiers), grep across multiple files, sort `-rn`/`-k`, cut field
-ranges and character positions, wc across multiple files, sed (substitution,
-global, deletion, `-n`/`-e`, address ranges, in-place editing, back-references),
-awk (field splitting, `-F`, `NR`/`NF`/`FNR`, arrays, user-defined functions,
-`substr`/`split`, `sub`/`gsub`, `length`, `printf`, user variables), here
-strings (`<<<`), heredocs, `read -A`, `typeset -i`, arithmetic (modulo,
-negative), `file-test` operators (`-f`/`-d`/`-e`/`-s`), parameter join with
-custom separator, and string/parameter operations.
+basename, dirname, rm, tee, seq, mktemp, sleep), stdin for grep/cat/wc,
+glob patterns, recursive globs, module loading (`zsh/datetime`, `zsh/mathfunc`),
+stdin, exit codes, POSIX regex (`=~`, capture groups via `$match`, grep anchors,
+alternation, character classes, `+`, `?`, `{n}` quantifiers), grep across
+multiple files, sort `-rn`/`-k`, cut field ranges and character positions, wc
+across multiple files, sed (substitution, global, deletion, `-n`/`-e`, address
+ranges, in-place editing, back-references), awk (field splitting, `-F`,
+`NR`/`NF`/`FNR`, arrays, user-defined functions, `substr`/`split`, `sub`/`gsub`,
+`length`, `printf`, user variables), here strings (`<<<`), heredocs, `read -A`,
+`typeset -i`, arithmetic (modulo, negative), `file-test` operators
+(`-f`/`-d`/`-e`/`-s`), parameter join with custom separator, and string/parameter
+operations.
 
 Known limitations (documented as `knownFail`): subshells require fork (fail
-silently), pipes between commands fail, grep shim only reads file args (not
-stdin), grep `-A`/`-B` context flags unimplemented, `zsh/mathfunc` not compiled
-into default wasm binary.
+silently), pipes between commands fail, grep `-A`/`-B` context flags unimplemented.
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
