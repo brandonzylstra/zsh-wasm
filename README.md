@@ -397,10 +397,10 @@ most common ones:
 | `wc`     | `-l` `-w` `-c`       | lines, words, bytes; default shows all three |
 | `head`   | `-n N`, `-N`         | first N lines (default 10) |
 | `tail`   | `-n N`, `-N`         | last N lines (default 10) |
-| `grep`   | `-i` `-v` `-n` `-c`  | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc) |
-| `sort`   | `-r` `-n` `-u`       | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)` |
+| `grep`   | `-i` `-v` `-n` `-c` `-A`/`-B`/`-C N` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc) |
+| `sort`   | `-r` `-n` `-u` `-k N` | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)`; `-k N` sorts by Nth field |
 | `uniq`   | —                    | removes consecutive duplicate lines |
-| `cut`    | `-d DELIM` `-f N`    | field ranges (`1-3`, `2,4`) supported |
+| `cut`    | `-d DELIM` `-f RANGE` `-c N[-M]` | field ranges (`1-3`, `2,4`); `-c` for character positions |
 | `tr`      | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |
 | `date`    | `+FORMAT`            | uses `strftime` from `zsh/datetime`; no timezone (outputs UTC) |
 | `basename`| suffix arg           | strips directory and optional suffix (`basename /a/b.txt .txt` → `b`) |
@@ -412,10 +412,10 @@ most common ones:
 | `sleep`   | —                    | no-op in wasm (synchronous environment); prevents "command not found" |
 | `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
 | `xargs`   | `-I STR`, `-n N`     | reads stdin; default collects all items into one call; `-I` replaces per-line; `-n` batches |
+| `env`     | `VAR=val`, `-u VAR`  | prints environment or runs command with modified env; `-i` (clear env) silently ignored |
+| `printenv`| `[VAR ...]`          | prints value of named variables, or all exported variables |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
-
-Note: `sort` supports `-k N` (sort by Nth whitespace-delimited field); `cut` supports `-c N` and `-c N-M` (character positions) in addition to the field-based `-f` flag.
 
 When built with `--with-sed`, `--with-awk`, and/or `--with-bc`, compiled-in builtins are also available:
 
@@ -440,6 +440,11 @@ Known Limitations
   (no subshell isolation); (2) output larger than the OS pipe buffer (~64 KB) would
   deadlock. For typical scripting workloads neither limit matters. `$(< file)` is
   handled by a separate fast path and has no such restrictions.
+- **Subshell `(...)` variable isolation** — `(cmd)` subshells are rewritten by
+  `simulatePipes()` to `{ cmd }` group commands so they execute, but variable
+  mutations inside leak into the parent scope. `x=outer; (x=inner); echo $x`
+  prints `inner` not `outer`. True isolation requires `fork()`, which is not
+  available in wasm.
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
 - **`awk` (--with-awk build) reads only from file args** — same constraint as sed; use `awk 'prog' file` or `awk 'prog' <<< "data"` not `echo data | awk 'prog'`.

@@ -243,35 +243,28 @@ Candidates:
 
 ---
 
-### npm publish prerequisites
+### npm publish prerequisites ✓ done
 
-Before publishing `zsh-wasm` to the npm registry:
-
-1. All TypeScript types reviewed and documented
-2. Shim gaps assessed — at minimum, document which POSIX utilities are and
-   are not available
-3. README updated with a quick-start example and known limitations
-4. Version policy decided (currently `0.x`; no stability guarantee until `1.0`)
-5. Wasm delivery strategy confirmed (bundle vs. CDN vs. npm asset)
+1. TypeScript types reviewed and documented ✓
+2. Shim table complete: all shimmed utilities listed with correct flag columns;
+   env/printenv added; grep `-A`/`-B`/`-C`, sort `-k N`, cut `-c` documented ✓
+3. README has quick-start example and Known Limitations (incl. subshell isolation) ✓
+4. **Version policy**: `0.x` until `1.0`. No stability guarantee on the API before
+   `1.0`. Breaking changes get a minor-version bump (e.g. `0.2.0`). ✓
+5. **Wasm delivery**: bundle as npm asset (current). `.wasm` is ~900 KB
+   uncompressed / ~300 KB gzip'd. CDN and user-supplied-path options deferred
+   until there is user demand. ✓
 
 ---
 
 ## Open questions / possible
 
-### Wasm delivery strategy
+### Wasm delivery strategy ✓ decided
 
-Currently the npm package ships four files: `zsh-runtime.js`, `zsh-worker.js`,
-`zsh.js`, `zsh.wasm`. The `.wasm` file is ~900 KB uncompressed. Options:
-
-- **Bundle as npm asset** (current): works everywhere, no CDN dependency,
-  but increases npm install size for everyone
-- **CDN reference**: runtime fetches wasm from a CDN URL; smaller npm package,
-  but adds network dependency
-- **User-supplied wasm**: ship runtime + worker, let users provide the `.wasm`
-  path (maximum flexibility, worse DX)
-
-Decision affects API surface (`runZshScript` options) and should be made before
-`1.0`.
+**Decision**: bundle as npm asset. `.wasm` ships inside the package (~900 KB
+uncompressed, ~300 KB gzip'd). CDN and user-supplied-path options deferred until
+there is user demand — they would require an API change and are not needed for
+the primary use case.
 
 ---
 
