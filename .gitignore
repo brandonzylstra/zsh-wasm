@@ -1,10 +1,16 @@
 build-zsh/
 build-sed/
 build-bc/
+build-awk/
 zsh-5.9/
 zsh-5.9.tar.xz
 bc-7.0.3/
 bc-7.0.3.tar.gz
+awk-20260426/
+awk-20260426.tar.gz
+bc-src/bc_help.c
+bc-src/dc_help.c
+bc-src/bc_lib.c
 ncurses-stub/lib/
 ncurses-stub/*.o
 npm/zsh.js
