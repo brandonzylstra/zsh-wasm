@@ -78,6 +78,20 @@
     color: #e3b341;
   }
   pre.script-code .stdin-label { color: #8b949e; font-style: italic; }
+  .output-section { margin-top: 0.4rem; }
+  pre.output-code {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    background: #0d1117;
+    border-left: 2px solid;
+    border-radius: 0 4px 4px 0;
+    white-space: pre-wrap;
+    font-size: 0.8rem;
+  }
+  pre.output-pass { border-color: #3fb950; color: #3fb950; }
+  pre.output-fail { border-color: #f85149; color: #f85149; }
+  pre.output-run  { border-color: #e3b341; color: #e3b341; }
+  .output-empty   { color: #484f58; font-style: italic; }
 </style>
 </head>
 <body>
@@ -488,7 +502,8 @@ function addRow(t) {
     detailTr.style.display = 'none';
     detailTr.innerHTML = `<td colspan="3"><pre class="script-code">${esc(t.script)}${
         t.stdin != null ? `\n<span class="stdin-label"># stdin: ${esc(t.stdin)}</span>` : ''
-    }</pre></td>`;
+    }</pre><div class="output-section" style="display:none"></div></td>`;
+    tr._detailTr = detailTr;
 
     tbody.appendChild(tr);
     tbody.appendChild(detailTr);
@@ -527,6 +542,17 @@ function updateRow(tr, pass, actual, expectedStr, knownFail = false) {
     }
 }
 
+function updateDetailOutput(tr, pass, actual) {
+    const section = tr._detailTr?.querySelector('.output-section');
+    if (!section) return;
+    const cls = pass ? 'output-pass' : 'output-fail';
+    const content = actual
+        ? esc(actual)
+        : `<span class="output-empty">(no output)</span>`;
+    section.style.display = '';
+    section.innerHTML = `<pre class="output-code ${cls}">${content}</pre>`;
+}
+
 function updateSummary() {
     const done = passed + failed + xfailed;
     let text;
@@ -557,6 +583,11 @@ async function runTest(t, tr) {
     statusEl.textContent = 'running';
     statusEl.setAttribute('data-test-status', 'running');
     tr.cells[2].innerHTML = '';
+    const outputSection = tr._detailTr?.querySelector('.output-section');
+    if (outputSection) {
+        outputSection.style.display = '';
+        outputSection.innerHTML = `<pre class="output-code output-run">running…</pre>`;
+    }
     updateSummary();
 
     let result;
@@ -589,6 +620,7 @@ async function runTest(t, tr) {
     else failed++;
 
     updateRow(tr, pass, actual, expectedStr, kf);
+    updateDetailOutput(tr, pass, actual);
     updateSummary();
 }
 
