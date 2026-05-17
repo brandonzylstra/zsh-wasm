@@ -627,6 +627,46 @@ rm() {
     fi
   done
 }
+env() {
+  local -a _vars _cmd _unset
+  local _a _k _v
+  while (( $# )); do
+    case \${1-} in
+      -i | --ignore-environment) ;;
+      -u)  shift; _unset+=($1) ;;
+      -u*) _unset+=(\${1#-u}) ;;
+      --) shift; break ;;
+      *=*) _vars+=($1) ;;
+      -*) ;;
+      *) break ;;
+    esac
+    shift
+  done
+  _cmd=("$@")
+  if (( !\${#_cmd} )); then
+    local _k
+    for _k in "\${(@k)parameters}"; do
+      [[ \${parameters[$_k]} == *export* ]] && print -- "$_k=\${(P)_k}"
+    done
+    return
+  fi
+  for _a in "\${(@)_unset}"; do unset "$_a"; done
+  for _a in "\${(@)_vars}"; do
+    _k=\${_a%%=*}; _v=\${_a#*=}
+    export "$_k=$_v"
+  done
+  "\${_cmd[@]}"
+}
+printenv() {
+  local _v
+  if (( $# )); then
+    for _v; do print -- "\${(P)_v}"; done
+  else
+    for _v in "\${(@k)parameters}"; do
+      [[ \${parameters[$_v]} == *export* ]] && print -- "$_v=\${(P)_v}"
+    done
+  fi
+}
 `;
 
 // Runs a zsh script off the main thread via a Web Worker.

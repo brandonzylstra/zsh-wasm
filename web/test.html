@@ -761,6 +761,19 @@ const tests = [
     { name: 'xargs-file',
       script: "printf 'hello\\nworld\\n' > /tmp/xf.txt\nxargs echo < /tmp/xf.txt",
       expected: 'hello world' },
+    // env / printenv shims
+    { name: 'env-set',
+      script: "env ENVTEST=hello printenv ENVTEST",
+      expected: 'hello' },
+    { name: 'env-multi',
+      script: "env A=1 B=2 printenv A B",
+      expected: '1\n2' },
+    { name: 'env-unset',
+      script: "export GONE=yes; env -u GONE printenv GONE; echo done",
+      expected: 'done' },
+    { name: 'printenv-basic',
+      script: "export PVTEST=world; printenv PVTEST",
+      expected: 'world' },
 ];
 
 const tbody = document.getElementById('results');
