@@ -726,10 +726,14 @@ const tests = [
     { name: 'mktemp-template',
       script: "f=$(mktemp /tmp/mytest.XXXXXX); [[ -f $f ]] && echo yes || echo no",
       expected: 'yes' },
-    // sleep shim (no-op in wasm — just confirm it doesn't error)
-    { name: 'sleep-noop',
-      script: "sleep 1; echo ok",
+    // sleep: stdout must be unaffected regardless of SharedArrayBuffer availability
+    { name: 'sleep-stdout-ok',
+      script: "sleep 0; echo ok",
       expected: 'ok' },
+    // sleep: multi-step script survives a non-zero sleep duration
+    { name: 'sleep-continue',
+      script: "echo before; sleep 0.01; echo after",
+      expected: 'before\nafter' },
     // basename shim
     { name: 'basename-basic',
       script: "basename /foo/bar",

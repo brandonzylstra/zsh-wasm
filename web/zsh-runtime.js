@@ -591,7 +591,7 @@ mktemp() {
   fi
   print -- "$result"
 }
-sleep() { : }
+sleep() { printf '%s' "\${1:-0}" > /dev/wasm_sleep }
 xargs() {
   local _replace='' _max_args=0 _item _arg _line _stdin _cnt=0
   local -a _cmd _items _batch _expanded _flat

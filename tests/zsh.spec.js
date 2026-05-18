@@ -7,3 +7,22 @@ test('all zsh-wasm tests pass', async ({ page }) => {
     const failures = await page.locator('tr:not([data-known-fail]) [data-test-status="fail"]').count();
     expect(failures, 'some tests failed — open test.html to see details').toBe(0);
 });
+
+test('sleep blocks for real when SharedArrayBuffer is available', async ({ page }) => {
+    await page.goto('/test.html');
+    const result = await page.evaluate(async () => {
+        const { runZshScript } = await import('./zsh-runtime.js');
+        const hasSAB = typeof SharedArrayBuffer !== 'undefined';
+        const t0 = Date.now();
+        await runZshScript('sleep 0.2; echo ok');
+        const elapsed = Date.now() - t0;
+        return { hasSAB, elapsed };
+    });
+    if (result.hasSAB) {
+        // Real sleep: worker must have blocked for at least 150 ms.
+        expect(result.elapsed).toBeGreaterThan(150);
+    } else {
+        // No-op path: should return almost immediately.
+        expect(result.elapsed).toBeLessThan(2000);
+    }
+});

@@ -26,6 +26,32 @@ function startPreInit() {
         stdin: () => capture.stdinFn ? capture.stdinFn() : null,
     }).then(mod => {
         _module = mod;
+        // Register /dev/wasm_sleep: the sleep shim writes "N" here to sleep N seconds.
+        // In a Web Worker, Atomics.wait() is permitted and blocks only the worker thread.
+        // SharedArrayBuffer requires cross-origin isolation (COOP+COEP headers); without
+        // it we fall back to a no-op with a stderr diagnostic.
+        try {
+            const FS  = mod.FS;
+            const dev = FS.makedev(64, 0);
+            FS.registerDevice(dev, {
+                read:  () => 0,
+                write(stream, buffer, offset, length) {
+                    const txt  = new TextDecoder().decode(buffer.subarray(offset, offset + length)).trim();
+                    const secs = parseFloat(txt);
+                    const ms   = isNaN(secs) ? 0 : Math.max(0, Math.round(secs * 1000));
+                    if (typeof SharedArrayBuffer !== 'undefined') {
+                        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+                    } else {
+                        _capture.err.push(
+                            'sleep: real sleep requires cross-origin isolation ' +
+                            '(COOP + COEP headers enable SharedArrayBuffer)'
+                        );
+                    }
+                    return length;
+                },
+            });
+            FS.mkdev('/dev/wasm_sleep', dev);
+        } catch(e) {}
         self.postMessage({ type: 'ready' });
         return mod;
     });

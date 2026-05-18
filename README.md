@@ -409,7 +409,7 @@ most common ones:
 | `tee`     | `-a`                 | reads all stdin, writes to file(s) and stdout; use with `< file` or `<<< str`, not pipes |
 | `seq`     | `N`, `start N`, `start step N` | integer sequence; `seq 0 2 10` → `0 2 4 6 8 10` |
 | `mktemp`  | `-d`, template       | creates temp file or dir; replaces trailing `X`'s with random digits |
-| `sleep`   | —                    | no-op in wasm (synchronous environment); prevents "command not found" |
+| `sleep`   | seconds (float)      | real sleep via `Atomics.wait()` in the Web Worker when `SharedArrayBuffer` is available (requires COOP+COEP headers); prints a stderr diagnostic and continues otherwise |
 | `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
 | `xargs`   | `-I STR`, `-n N`     | reads stdin; default collects all items into one call; `-I` replaces per-line; `-n` batches |
 | `env`     | `VAR=val`, `-u VAR`  | prints environment or runs command with modified env; `-i` (clear env) silently ignored |
