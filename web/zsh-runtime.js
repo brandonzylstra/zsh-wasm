@@ -356,8 +356,8 @@ cp() { print -r -- "$(<$1)" > "$2" }
 mv() { cp "$1" "$2" && zf_rm "$1" }
 date() {
   zmodload zsh/datetime 2>/dev/null
-  local fmt='%a %b %e %H:%M:%S UTC %Y'
-  [[ $1 == +* ]] && fmt=\${1#+}
+  local fmt='%a %b %e %H:%M:%S %z %Y'
+  [[ \${1-} == +* ]] && fmt=\${1#+}
   strftime $fmt $EPOCHSECONDS
 }
 sort() {

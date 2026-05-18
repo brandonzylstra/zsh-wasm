@@ -402,7 +402,7 @@ most common ones:
 | `uniq`   | —                    | removes consecutive duplicate lines |
 | `cut`    | `-d DELIM` `-f RANGE` `-c N[-M]` | field ranges (`1-3`, `2,4`); `-c` for character positions |
 | `tr`      | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |
-| `date`    | `+FORMAT`            | uses `strftime` from `zsh/datetime`; no timezone (outputs UTC) |
+| `date`    | `+FORMAT`            | uses `strftime` from `zsh/datetime`; always uses the browser's local timezone (Emscripten's `localtime` delegates to JS `Date`); `%z` outputs the correct UTC offset |
 | `basename`| suffix arg           | strips directory and optional suffix (`basename /a/b.txt .txt` → `b`) |
 | `dirname` | —                    | strips last component (`dirname /a/b` → `/a`; `dirname foo` → `.`) |
 | `rm`      | `-f` `-r`/`-rf`      | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
