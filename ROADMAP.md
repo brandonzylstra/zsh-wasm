@@ -270,15 +270,13 @@ the primary use case.
 
 ---
 
-### Node.js support
+### Node.js support — hypothetically possible, mostly closed
 
 Currently targets browsers only (Web Workers, `import.meta.url`). Node.js would
-require:
-- Replace `Worker` with `worker_threads`
-- Replace `import.meta.url` with `__dirname` or `import.meta.url` (ESM)
-- Test with Node 18+
-
-Feasibility: high. Priority: low until someone asks.
+require replacing `Worker` with `worker_threads` and resolving `import.meta.url`
+path differences. Feasibility is high, but no concrete use case has been
+identified that isn't better served by Docker or a native shell subprocess.
+Not on the roadmap unless a real use case emerges.
 
 ---
 
