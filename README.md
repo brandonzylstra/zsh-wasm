@@ -452,7 +452,10 @@ Known Limitations
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
 - **`awk` (--with-awk build) reads only from file args** — same constraint as sed; use `awk 'prog' file` or `awk 'prog' <<< "data"` not `echo data | awk 'prog'`.
-- **`date` has no timezone** — outputs UTC regardless of system locale.
+- **`date` uses the browser's local timezone** — Emscripten's `localtime_r` delegates to the JS `Date` object, so the `TZ` environment variable has no effect. `%z` correctly outputs the runtime's UTC offset (e.g. `-0400`).
+- **Background jobs are not supported** — the `&` operator requires `fork()`. Running a command in the background will abort the script.
+- **Process substitution is not supported** — `<(cmd)` and `>(cmd)` require `fork()` and will abort the script. Use a temp file or a here-string (`<<<`) instead.
+- **`sleep` requires COOP+COEP headers for real blocking** — without `SharedArrayBuffer` (cross-origin isolation), `sleep` is a no-op and a stderr diagnostic is printed. The demo site is served with the required headers; set them on your own server to get real blocking.
 - **stdin is always newline-terminated** — if the string passed as `stdin` does
   not end with `\n`, one is appended before feeding it to the wasm process. This
   is the correct POSIX convention for text and is transparent to line-oriented

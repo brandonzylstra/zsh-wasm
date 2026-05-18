@@ -920,6 +920,24 @@ const tests = [
     { name: 'base64-padding-1',
       script: "printf 'Hel' | base64",
       expected: 'SGVs' },
+    // external command stubs
+    { name: 'cnf-generic',
+      script: "curl 2>&1; echo exit=$?",
+      matchIncludes: true,
+      expected: "zsh-wasm: 'curl' is not available" },
+    { name: 'cnf-exit-127',
+      script: "python3 2>/dev/null; echo $?",
+      expected: '127' },
+    { name: 'cnf-specific-hint',
+      script: "python3 2>&1; echo exit=$?",
+      matchIncludes: true,
+      expected: 'Python is not available' },
+    { name: 'cnf-no-false-positive',
+      script: "command -v totally_unknown_cmd_xyz; echo $?",
+      expected: '1' },
+    { name: 'cnf-continues-after-stub',
+      script: "git 2>/dev/null; echo after=$?",
+      expected: 'after=127' },
 ];
 
 const tbody = document.getElementById('results');

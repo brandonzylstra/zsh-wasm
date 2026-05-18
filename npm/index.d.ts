@@ -34,6 +34,20 @@ export interface WorkerPool {
 /**
  * Run a zsh script in a Web Worker and return its output.
  * Uses a shared pool of size 1 by default; state never leaks between calls.
+ *
+ * @remarks
+ * **Known limitations of the zsh-wasm sandbox:**
+ * - Background jobs (`cmd &`) are not supported — they abort the script.
+ * - Process substitution (`<(cmd)`, `>(cmd)`) is not supported — aborts the script.
+ * - `$(...)` command substitution runs in-process (no subshell isolation):
+ *   variable mutations inside `$(...)` leak to the parent scope.
+ * - `sleep` requires `SharedArrayBuffer` for real blocking (the page must be
+ *   served with `Cross-Origin-Opener-Policy: same-origin` and
+ *   `Cross-Origin-Embedder-Policy: require-corp`); without it, sleep is a no-op.
+ * - The `TZ` environment variable has no effect — `date` always uses the
+ *   browser's local timezone (Emscripten delegates `localtime_r` to JS `Date`).
+ * - Many external binaries are not available; well-known ones (curl, git,
+ *   python3, etc.) emit a helpful stderr message and return exit code 127.
  */
 export function runZshScript(src: string, options?: RunOptions): Promise<ZshResult>;
 

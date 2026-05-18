@@ -859,6 +859,35 @@ base64() {
     printf '%b\\n' "\$_out"
   fi
 }
+_zw_stub() {
+  print -u2 "zsh-wasm: '\${funcstack[2]}' is not available — $1"
+  return 127
+}
+curl()    { _zw_stub 'no network access in zsh-wasm. Pass data via the stdin option.' }
+wget()    { _zw_stub 'no network access in zsh-wasm. Pass data via the stdin option.' }
+git()     { _zw_stub 'requires a real filesystem and network; not available in wasm.' }
+python()  { _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
+python3() { _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
+python2() { _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
+ruby()    { _zw_stub 'Ruby is not available; zsh-wasm runs zsh scripts only.' }
+perl()    { _zw_stub 'Perl is not available; zsh-wasm runs zsh scripts only.' }
+node()    { _zw_stub 'Node.js is not available inside the wasm worker.' }
+npm()     { _zw_stub 'npm is not available inside the wasm worker.' }
+docker()  { _zw_stub 'Docker requires a host OS kernel — not possible in wasm.' }
+ssh()     { _zw_stub 'no network access in zsh-wasm.' }
+sudo()    { _zw_stub 'privilege escalation is not possible in the wasm sandbox.' }
+tar()     { _zw_stub 'tar is not shimmed. Use zsh glob expansion or cp/mv instead.' }
+gzip()    { _zw_stub 'compression is not supported in zsh-wasm.' }
+make()    { _zw_stub 'make is not available; only zsh builtins and shimmed commands run in wasm.' }
+gcc()     { _zw_stub 'compilers are not available in zsh-wasm.' }
+clang()   { _zw_stub 'compilers are not available in zsh-wasm.' }
+vim()     { _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
+vi()      { _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
+nano()    { _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
+less()    { _zw_stub 'pagers require an interactive terminal — not available in zsh-wasm.' }
+more()    { _zw_stub 'pagers require an interactive terminal — not available in zsh-wasm.' }
+man()     { _zw_stub 'man pages are not available in zsh-wasm.' }
+ping()    { _zw_stub 'no network access in zsh-wasm.' }
 `;
 
 // Detect pipeline operator (space | space, excluding || and |& and |>).
