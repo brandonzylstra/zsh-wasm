@@ -96,13 +96,19 @@ behaviour pending a fix.
 
 ---
 
-### npm package ✓ done
+### npm package ✓ published as @brandon.zylstra/zsh-wasm
 
-`npm/package.json` defines the `zsh-wasm` package. After building:
+Published as `@brandon.zylstra/zsh-wasm@0.1.0` — npm blocked the unscoped name
+`zsh-wasm` due to similarity with `hash-wasm` (new-account restriction). Once the
+account has history, republish as the unscoped `zsh-wasm` and deprecate the scoped
+package with a pointer to the new name.
 
+To republish under the unscoped name when available:
 ```
+# update npm/package.json: "name": "zsh-wasm"
 bin/build --out npm/
 cd npm && npm publish
+npm deprecate @brandon.zylstra/zsh-wasm "moved to zsh-wasm"
 ```
 
 Entry point is `zsh-runtime.js`, which exports `runZshScript(src, { stdin, fs })`.

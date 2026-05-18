@@ -1,5 +1,5 @@
 {
-  "name": "zsh-wasm",
+  "name": "@brandon.zylstra/zsh-wasm",
   "version": "0.1.0",
   "description": "Zsh 5.9 compiled to WebAssembly — run a real zsh interpreter in the browser",
   "type": "module",
@@ -22,7 +22,7 @@
   "license": "Zsh",
   "repository": {
     "type": "git",
-    "url": "https://github.com/brandonzylstra/zsh-wasm"
+    "url": "git+https://github.com/brandonzylstra/zsh-wasm.git"
   },
   "sideEffects": ["zsh.js"]
 }
