@@ -14,6 +14,15 @@ export interface RunOptions {
    * Future: `'native'` for a wasm-threads build with real fork().
    */
   fork?: 'simulate' | 'off';
+  /**
+   * Fall back to a CPU-spinning busy-wait for `sleep` when `SharedArrayBuffer` is
+   * unavailable (i.e. the page is not cross-origin isolated — no COOP+COEP headers).
+   * Without this, `sleep` is a no-op when cross-origin isolation is absent.
+   * Default: `false`.
+   *
+   * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements
+   */
+  busySleepFallback?: boolean;
 }
 
 export interface ZshResult {

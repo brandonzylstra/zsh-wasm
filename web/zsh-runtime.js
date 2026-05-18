@@ -1056,12 +1056,13 @@ class WorkerPool {
             fs: job.fs ?? ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
             stdin: job.stdin ?? null,
+            busySleepFallback: job.busySleepFallback ?? false,
         });
     }
 
-    run(src, { stdin = null, fs = null, fork = 'simulate' } = {}) {
+    run(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false } = {}) {
         return new Promise((resolve, reject) => {
-            const job = { src, stdin, fs, fork, resolve, reject };
+            const job = { src, stdin, fs, fork, busySleepFallback, resolve, reject };
             if (this.#ready.length > 0) {
                 this.#dispatch(this.#ready.shift(), job);
             } else {
@@ -1082,9 +1083,9 @@ class WorkerPool {
 // Lazy default pool — created on first runZshScript() call.
 let _defaultPool = null;
 
-export function runZshScript(src, { stdin = null, fs = null, fork = 'simulate' } = {}) {
+export function runZshScript(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false } = {}) {
     if (!_defaultPool) _defaultPool = new WorkerPool(1);
-    return _defaultPool.run(src, { stdin, fs, fork });
+    return _defaultPool.run(src, { stdin, fs, fork, busySleepFallback });
 }
 
 /** Create a pool of pre-warmed workers. Call pool.run(src, opts) and pool.shutdown(). */

@@ -6,9 +6,10 @@
 
 importScripts('./zsh.js');
 
-let _capture = null;
-let _module  = null;
-let _moduleReady = null; // Promise<module>, resolved when pre-init finishes
+let _capture          = null;
+let _module           = null;
+let _moduleReady      = null; // Promise<module>, resolved when pre-init finishes
+let _busySleepFallback = false;
 
 function startPreInit() {
     // Fresh capture object — closures below reference this specific instance.
@@ -28,8 +29,10 @@ function startPreInit() {
         _module = mod;
         // Register /dev/wasm_sleep: the sleep shim writes "N" here to sleep N seconds.
         // In a Web Worker, Atomics.wait() is permitted and blocks only the worker thread.
-        // SharedArrayBuffer requires cross-origin isolation (COOP+COEP headers); without
-        // it we fall back to a no-op with a stderr diagnostic.
+        // Sleep strategy cascade:
+        //   1. SharedArrayBuffer available (COOP+COEP) → Atomics.wait (real block, no CPU)
+        //   2. busySleepFallback: true in RunOptions → Date.now() spin loop (burns CPU)
+        //   3. otherwise → no-op + stderr diagnostic
         try {
             const FS  = mod.FS;
             const dev = FS.makedev(64, 0);
@@ -41,10 +44,13 @@ function startPreInit() {
                     const ms   = isNaN(secs) ? 0 : Math.max(0, Math.round(secs * 1000));
                     if (typeof SharedArrayBuffer !== 'undefined') {
                         Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+                    } else if (_busySleepFallback) {
+                        const end = Date.now() + ms;
+                        while (Date.now() < end) {}
                     } else {
                         _capture.err.push(
-                            'sleep: real sleep requires cross-origin isolation ' +
-                            '(COOP + COEP headers enable SharedArrayBuffer)'
+                            'sleep: SharedArrayBuffer unavailable (page lacks COOP+COEP headers). ' +
+                            'Pass busySleepFallback: true to RunOptions to use a CPU-burning busy-wait instead.'
                         );
                     }
                     return length;
@@ -60,7 +66,8 @@ function startPreInit() {
 // Begin pre-initializing immediately so the first run arrives to a warm module.
 startPreInit();
 
-self.onmessage = async ({ data: { src, fs, idbfsMount, stdin } }) => {
+self.onmessage = async ({ data: { src, fs, idbfsMount, stdin, busySleepFallback } }) => {
+    _busySleepFallback = !!busySleepFallback;
     await _moduleReady;
     const module  = _module;
     const capture = _capture;

@@ -938,6 +938,15 @@ const tests = [
     { name: 'cnf-continues-after-stub',
       script: "git 2>/dev/null; echo after=$?",
       expected: 'after=127' },
+    { name: 'sleep-busy-fallback',
+      run: async () => {
+          const t0 = Date.now();
+          const r = await runZshScript('sleep 0.2; echo ok', { busySleepFallback: true });
+          r._elapsed = Date.now() - t0;
+          return r;
+      },
+      check: r => r.stdout.trim() === 'ok' && r._elapsed >= 150,
+      expected: 'stdout=ok and elapsed>=150ms' },
 ];
 
 const tbody = document.getElementById('results');
@@ -1068,7 +1077,10 @@ async function runTest(t, tr) {
 
     const actual = t.checkStderr ? result.stderr : result.stdout.trim();
     let pass, expectedStr;
-    if (t.expected !== undefined) {
+    if (t.check) {
+        pass = t.check(result);
+        expectedStr = t.expected ?? '(custom check)';
+    } else if (t.expected !== undefined) {
         expectedStr = t.expected;
         pass = t.matchIncludes ? actual.includes(t.expected) : actual === t.expected.trim();
     } else {

@@ -96,10 +96,100 @@ Well-known unavailable commands (curl, git, python3, docker, etc.) emit a helpfu
 
 - **No fork** — background jobs (`cmd &`), process substitution (`<(cmd)`), and unsupported external binaries all require `fork()`, which is not available in WebAssembly.
 - **`$(...)` runs in-process** — no true subshell isolation; variable assignments inside `$(...)` leak to the parent scope.
-- **`sleep` needs cross-origin isolation** — real blocking requires `SharedArrayBuffer`, which requires `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` headers. Without them, `sleep` is a no-op.
+- **`sleep` needs cross-origin isolation for real blocking** — `SharedArrayBuffer` (required for `Atomics.wait`) is only available when the page is cross-origin isolated. Without it, `sleep` is a no-op unless you pass `busySleepFallback: true` to `RunOptions`, which uses a CPU-spinning busy-wait instead. See [Cross-origin isolation](#cross-origin-isolation) below.
 - **`TZ` env var ignored** — `date` always uses the browser's local timezone (Emscripten delegates `localtime_r` to JS `Date`). `%z` correctly shows the UTC offset.
 - **stdin is newline-terminated** — a trailing `\n` is always appended if missing (correct POSIX behavior; transparent to line-oriented tools).
 - **No ZLE** — the interactive line editor and completion system are excluded (no real terminal).
+
+## Cross-origin isolation
+
+`sleep` uses `Atomics.wait()` for real blocking, which requires [`SharedArrayBuffer`](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer), which requires cross-origin isolation.
+
+**Check whether your page is isolated:**
+
+```js
+if (crossOriginIsolated) {
+    // SharedArrayBuffer available — sleep works correctly
+} else {
+    // sleep will be a no-op (or use busySleepFallback: true for a CPU spin-wait)
+}
+```
+
+**Set up cross-origin isolation** by sending these two HTTP headers on your page (not just your assets — the HTML document itself):
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+Common server configurations:
+
+```nginx
+# nginx
+add_header Cross-Origin-Opener-Policy  "same-origin";
+add_header Cross-Origin-Embedder-Policy "require-corp";
+```
+
+```apache
+# Apache (.htaccess or VirtualHost)
+Header set Cross-Origin-Opener-Policy  "same-origin"
+Header set Cross-Origin-Embedder-Policy "require-corp"
+```
+
+```js
+// Express
+app.use((req, res, next) => {
+    res.setHeader('Cross-Origin-Opener-Policy',  'same-origin');
+    res.setHeader('Cross-Origin-Embedder-Policy', 'require-corp');
+    next();
+});
+```
+
+```js
+// Vite (vite.config.js)
+export default {
+    server: {
+        headers: {
+            'Cross-Origin-Opener-Policy':  'same-origin',
+            'Cross-Origin-Embedder-Policy': 'require-corp',
+        },
+    },
+};
+```
+
+```json
+// Vercel (vercel.json)
+{
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "Cross-Origin-Opener-Policy",  "value": "same-origin" },
+        { "key": "Cross-Origin-Embedder-Policy", "value": "require-corp" }
+      ]
+    }
+  ]
+}
+```
+
+```toml
+# Netlify (_headers file)
+/*
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: require-corp
+```
+
+> **Note:** COEP `require-corp` means every resource loaded by your page (images, scripts, fonts, iframes) must either be same-origin or served with a `Cross-Origin-Resource-Policy: cross-origin` header. If you load third-party resources that don't set this header, use `credentialless` instead of `require-corp` (supported in Chrome/Edge; Firefox support is in progress).
+
+**Fallback without cross-origin isolation:**
+
+If you can't set the headers (e.g., a shared hosting environment), you can opt into a CPU-spinning busy-wait:
+
+```js
+await runZshScript('sleep 1; echo done', { busySleepFallback: true });
+```
+
+This actually sleeps for the right duration but burns CPU. Fine for short sleeps in development; avoid for long sleeps in production.
 
 ## Demo
 
