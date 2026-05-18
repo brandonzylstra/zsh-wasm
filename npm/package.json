@@ -1,6 +1,6 @@
 {
   "name": "@brandon.zylstra/zsh-wasm",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Zsh 5.9 compiled to WebAssembly — run a real zsh interpreter in the browser",
   "type": "module",
   "main": "zsh-runtime.js",
