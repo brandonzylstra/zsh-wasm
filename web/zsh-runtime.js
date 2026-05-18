@@ -111,29 +111,53 @@ wc() {
   done
 }
 head() {
-  local n=10 f _stdin
+  local n=10 _bytes=0 f _stdin _content
   local -a lines
-  [[ \${1-} == -[0-9]* ]] && n=\${1#-} && shift
-  [[ \${1-} == -n      ]] && n=$2      && shift 2
-  if (( $# )); then
-    for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[1,$n]}; done
+  if   [[ \${1-} == -c ]]; then _bytes=1; n=$2; shift 2
+  elif [[ \${1-} == -c* ]]; then _bytes=1; n=\${1#-c}; shift
+  elif [[ \${1-} == -[0-9]* ]]; then n=\${1#-}; shift
+  elif [[ \${1-} == -n ]]; then n=$2; shift 2
+  elif [[ \${1-} == -n* ]]; then n=\${1#-n}; shift
+  fi
+  if (( _bytes )); then
+    if (( $# )); then
+      for f; do _content=$(<$f); print -- \${_content[1,$n]}; done
+    else
+      IFS= read -r -d '' _stdin; print -- \${_stdin[1,$n]}
+    fi
   else
-    IFS= read -r -d '' _stdin
-    lines=("\${(@f)_stdin}")
-    print -l -- \${lines[1,$n]}
+    if (( $# )); then
+      for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[1,$n]}; done
+    else
+      IFS= read -r -d '' _stdin
+      lines=("\${(@f)_stdin}")
+      print -l -- \${lines[1,$n]}
+    fi
   fi
 }
 tail() {
-  local n=10 f _stdin
+  local n=10 _bytes=0 f _stdin _content
   local -a lines
-  [[ \${1-} == -[0-9]* ]] && n=\${1#-} && shift
-  [[ \${1-} == -n      ]] && n=$2      && shift 2
-  if (( $# )); then
-    for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[-$n,-1]}; done
+  if   [[ \${1-} == -c ]]; then _bytes=1; n=$2; shift 2
+  elif [[ \${1-} == -c* ]]; then _bytes=1; n=\${1#-c}; shift
+  elif [[ \${1-} == -[0-9]* ]]; then n=\${1#-}; shift
+  elif [[ \${1-} == -n ]]; then n=$2; shift 2
+  elif [[ \${1-} == -n* ]]; then n=\${1#-n}; shift
+  fi
+  if (( _bytes )); then
+    if (( $# )); then
+      for f; do _content=$(<$f); print -- \${_content[-$n,-1]}; done
+    else
+      IFS= read -r -d '' _stdin; print -- \${_stdin[-$n,-1]}
+    fi
   else
-    IFS= read -r -d '' _stdin
-    lines=("\${(@f)_stdin}")
-    print -l -- \${lines[-$n,-1]}
+    if (( $# )); then
+      for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[-$n,-1]}; done
+    else
+      IFS= read -r -d '' _stdin
+      lines=("\${(@f)_stdin}")
+      print -l -- \${lines[-$n,-1]}
+    fi
   fi
 }
 grep() {
@@ -736,6 +760,103 @@ printenv() {
     for _v in "\${(@k)parameters}"; do
       [[ \${parameters[$_v]} == *export* ]] && print -- "$_v=\${(P)_v}"
     done
+  fi
+}
+which() {
+  local _cmd _ret=0
+  for _cmd; do
+    if (( \${+functions[\$_cmd]} )); then
+      print -- "\$_cmd: shell function"
+    elif (( \${+builtins[\$_cmd]} )); then
+      print -- "\$_cmd: builtin"
+    elif whence -p \$_cmd > /dev/null 2>&1; then
+      whence -p \$_cmd
+    else
+      print -u2 "which: no \$_cmd in PATH"
+      _ret=1
+    fi
+  done
+  return \$_ret
+}
+realpath() {
+  local _f
+  for _f; do print -- \${_f:A}; done
+}
+ln() {
+  local _sym=0 _force=0
+  while [[ \${1-} == -* ]]; do
+    [[ $1 == *s* ]] && _sym=1
+    [[ $1 == *f* ]] && _force=1
+    shift
+  done
+  if (( _sym )); then zf_symlink $1 $2
+  else               zf_ln      $1 $2
+  fi
+}
+base64() {
+  local _d=0
+  [[ \${1-} == -d || \${1-} == --decode ]] && { _d=1; shift; }
+  local _alpha='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+  local _in _out='' _i _len _b0 _b1 _b2 _v
+  IFS= read -r -d '' _in
+  _in=\${_in%$'\\n'}
+  if (( !_d )); then
+    _len=\${#_in}
+    _i=1
+    local _col=0
+    while (( _i <= _len )); do
+      _b0=$(printf '%d' "'\${_in[_i]}")
+      _b1=0; (( _i+1 <= _len )) && _b1=$(printf '%d' "'\${_in[_i+1]}")
+      _b2=0; (( _i+2 <= _len )) && _b2=$(printf '%d' "'\${_in[_i+2]}")
+      _out+=\${_alpha[$(( (_b0>>2) + 1 ))]}
+      _out+=\${_alpha[$(( (((_b0&3)<<4)|(_b1>>4)) + 1 ))]}
+      if (( _i+1 <= _len )); then
+        _out+=\${_alpha[$(( (((_b1&15)<<2)|(_b2>>6)) + 1 ))]}
+      else
+        _out+='='
+      fi
+      if (( _i+2 <= _len )); then
+        _out+=\${_alpha[$(( (_b2&63) + 1 ))]}
+      else
+        _out+='='
+      fi
+      (( _i += 3 ))
+      (( _col += 4 ))
+      if (( _col >= 76 )); then
+        _out+=$'\\n'
+        _col=0
+      fi
+    done
+    print -- \$_out
+  else
+    _in=\${_in//[[:space:]]/}
+    _len=\${#_in}
+    _i=1
+    local _c0 _c1 _c2 _c3 _o0 _o1 _o2
+    _out=''
+    while (( _i+3 <= _len+1 )); do
+      if [[ \${_in[_i]} == '=' ]]; then break; fi
+      _c0=$(( \${_alpha[(i)\${_in[_i  ]}]} - 1 ))
+      _c1=$(( \${_alpha[(i)\${_in[_i+1]}]} - 1 ))
+      _c2=0; _c3=0
+      _v=$(( (_c0<<2)|(_c1>>4) ))
+      _o0=$(( _v>>6 )); _o1=$(( (_v>>3)&7 )); _o2=$(( _v&7 ))
+      _out+="\\\\0\${_o0}\${_o1}\${_o2}"
+      if [[ \${_in[_i+2]} != '=' ]]; then
+        _c2=$(( \${_alpha[(i)\${_in[_i+2]}]} - 1 ))
+        _v=$(( ((_c1&15)<<4)|(_c2>>2) ))
+        _o0=$(( _v>>6 )); _o1=$(( (_v>>3)&7 )); _o2=$(( _v&7 ))
+        _out+="\\\\0\${_o0}\${_o1}\${_o2}"
+      fi
+      if [[ \${_in[_i+3]} != '=' ]]; then
+        _c3=$(( \${_alpha[(i)\${_in[_i+3]}]} - 1 ))
+        _v=$(( ((_c2&3)<<6)|_c3 ))
+        _o0=$(( _v>>6 )); _o1=$(( (_v>>3)&7 )); _o2=$(( _v&7 ))
+        _out+="\\\\0\${_o0}\${_o1}\${_o2}"
+      fi
+      (( _i += 4 ))
+    done
+    printf '%b\\n' "\$_out"
   fi
 }
 `;

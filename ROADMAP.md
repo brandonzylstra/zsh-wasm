@@ -61,7 +61,7 @@ tag carries `data-stdin`. No wasm binary change — runtime/loader only.
 
 ### Automated tests (Playwright) ✓ done
 
-`web/test.html` runs 218 test cases (217 passing, 1 `knownFail`) and compares actual vs. expected output:
+`web/test.html` runs 232 test cases (230 passing, 2 `knownFail`) and compares actual vs. expected output:
 - Open manually in a browser (via HTTP server)
 - Run automatically via [Playwright](https://playwright.dev/): `npx playwright test`
 
@@ -81,11 +81,13 @@ ranges, in-place editing, back-references), awk (field splitting, `-F`,
 operations, pipe simulation (`a | b | c` rewritten to temp-file chaining),
 subshell simulation (`(cmd)` rewritten to `{ cmd }` at top level),
 `fork: 'off'` no-pipe path, `createPool`/`shutdownDefaultPool` (including
-parallel execution via `createPool(2)`), and extended grep (`-r -l -o -e -m`).
+parallel execution via `createPool(2)`), extended grep (`-r -l -o -e -m`),
+`head -c`/`tail -c` byte-count mode, `which`, `realpath`, `ln`, and `base64`/`base64 -d`.
 
-Known limitation (1 `knownFail`): subshell variable mutations leak into the
+Known limitations (2 `knownFail`): (1) subshell variable mutations leak into the
 outer scope because `(cmd)` is rewritten to `{ cmd }` — no true process
 isolation without fork. `x=outer; (x=inner); echo $x` prints `inner` not `outer`.
+(2) Hard links (`ln src dst`) are not supported in Emscripten MEMFS.
 
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from

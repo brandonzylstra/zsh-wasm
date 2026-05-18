@@ -264,7 +264,7 @@ cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
 `-F` separator, multi-file), `zsh/mathfunc` (sin, cos, sqrt, log, etc.),
 basename/dirname path manipulation, rm/rmdir, tee, grep/cat/wc from stdin,
-seq, mktemp, sleep, find (`-name`/`-type`/`-maxdepth`/`-newer`), env/printenv, sort `-k` field sort, cut `-c` character positions, string operations (length, slice, replace, strip-prefix/suffix,
+seq, mktemp, sleep, find (`-name`/`-type`/`-maxdepth`/`-newer`), env/printenv, sort `-k` field sort, cut `-c` character positions, which, realpath, ln, base64/base64 -d, head/tail `-c` byte-count mode, string operations (length, slice, replace, strip-prefix/suffix,
 `${var:-default}`, upper/lower case), brace expansion, array/associative-array
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
 `$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, `zstat`,
@@ -395,8 +395,8 @@ most common ones:
 | `cp`     | —                    | single-file copy |
 | `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
 | `wc`     | `-l` `-w` `-c`       | lines, words, bytes; default shows all three |
-| `head`   | `-n N`, `-N`         | first N lines (default 10) |
-| `tail`   | `-n N`, `-N`         | last N lines (default 10) |
+| `head`   | `-n N`, `-N`, `-c N` | first N lines (default 10) or first N bytes |
+| `tail`   | `-n N`, `-N`, `-c N` | last N lines (default 10) or last N bytes |
 | `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1 |
 | `sort`   | `-r` `-n` `-u` `-k N` | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)`; `-k N` sorts by Nth field |
 | `uniq`   | —                    | removes consecutive duplicate lines |
@@ -414,6 +414,10 @@ most common ones:
 | `xargs`   | `-I STR`, `-n N`     | reads stdin; default collects all items into one call; `-I` replaces per-line; `-n` batches |
 | `env`     | `VAR=val`, `-u VAR`  | prints environment or runs command with modified env; `-i` (clear env) silently ignored |
 | `printenv`| `[VAR ...]`          | prints value of named variables, or all exported variables |
+| `which`   | —                    | identifies commands as shell functions, builtins, or external; exits 1 if not found |
+| `realpath`| —                    | resolves absolute path using zsh's `:A` modifier |
+| `ln`      | `-s`, `-f`           | symlinks via `zf_symlink`; hard links (`zf_ln`) not supported in MEMFS |
+| `base64`  | `-d`/`--decode`      | encode stdin to Base64 (76-char line wrap); decode Base64 to bytes |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
 
