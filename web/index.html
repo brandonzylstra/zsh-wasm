@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="./favicon.svg">
     <link rel="preload" href="./zsh.wasm" as="fetch" crossorigin="anonymous">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -130,6 +131,33 @@
             letter-spacing: 0.06em;
             margin-bottom: 0.5rem;
         }
+
+        /* ── CodeMirror lint marks (dark theme) ── */
+        .CodeMirror-lint-mark-error {
+            background-image: none;
+            text-decoration: underline wavy #f85149;
+            text-underline-offset: 3px;
+        }
+        .CodeMirror-lint-mark-warning {
+            background-image: none;
+            text-decoration: underline wavy #d29922;
+            text-underline-offset: 3px;
+        }
+        .CodeMirror-lint-tooltip {
+            background: #161b22;
+            border: 1px solid #30363d;
+            border-radius: 6px;
+            color: #e6edf3;
+            font-family: "SF Mono", "Fira Code", Menlo, monospace;
+            font-size: 0.8rem;
+            line-height: 1.4;
+            max-width: 420px;
+            padding: 6px 10px;
+            white-space: pre-wrap;
+            z-index: 100;
+        }
+        .CodeMirror-lint-message-error::before { content: "✖ "; color: #f85149; }
+        .CodeMirror-lint-message-warning::before { content: "⚠ "; color: #d29922; }
 
         /* ── CodeMirror 5 base overrides ── */
         .CodeMirror {
@@ -847,6 +875,7 @@ touch /tmp/testfile
 <!-- CodeMirror 5 -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/shell/shell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/lint/lint.min.js"></script>
 
 
 <script>var ZshWasmConfig = { fs: 'idbfs' };</script>

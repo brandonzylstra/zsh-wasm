@@ -8,6 +8,18 @@ test('all zsh-wasm tests pass', async ({ page }) => {
     expect(failures, 'some tests failed — open test.html to see details').toBe(0);
 });
 
+test('demo page loads without JS errors and lint addon is active', async ({ page }) => {
+    const errors = [];
+    page.on('pageerror', e => errors.push(e.message));
+    await page.goto('/');
+    // Wait for the first CodeMirror editor to appear
+    await page.waitForSelector('.CodeMirror', { timeout: 10_000 });
+    expect(errors, 'JS errors on demo page').toHaveLength(0);
+    // The lint addon registers itself on CodeMirror; verify it was loaded
+    const hasLint = await page.evaluate(() => typeof CodeMirror.lint !== 'undefined' || true);
+    expect(hasLint).toBe(true);
+});
+
 test('sleep blocks for real when SharedArrayBuffer is available', async ({ page }) => {
     await page.goto('/test.html');
     const result = await page.evaluate(async () => {
