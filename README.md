@@ -452,7 +452,7 @@ Known Limitations
 - **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
 - **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
 - **`awk` (--with-awk build) reads only from file args** — same constraint as sed; use `awk 'prog' file` or `awk 'prog' <<< "data"` not `echo data | awk 'prog'`.
-- **`date` uses the browser's local timezone** — Emscripten's `localtime_r` delegates to the JS `Date` object, so the `TZ` environment variable has no effect. `%z` correctly outputs the runtime's UTC offset (e.g. `-0400`).
+- **`TZ` supports UTC offsets only** — `TZ=UTC`, `TZ=UTC±H`, `TZ=UTC±H:MM`, and `TZ=±HH:MM` work. Named timezones (`TZ=America/New_York`) are not supported (no tzdata); `date` falls back to browser local time with a stderr warning.
 - **Background jobs are not supported** — the `&` operator requires `fork()`. Running a command in the background will abort the script.
 - **Process substitution is not supported** — `<(cmd)` and `>(cmd)` require `fork()` and will abort the script. Use a temp file or a here-string (`<<<`) instead.
 - **`sleep` requires COOP+COEP headers for real blocking** — without `SharedArrayBuffer` (cross-origin isolation), `sleep` is a no-op and a stderr diagnostic is printed. The demo site is served with the required headers; set them on your own server to get real blocking.

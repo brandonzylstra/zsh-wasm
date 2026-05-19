@@ -358,7 +358,51 @@ date() {
   zmodload zsh/datetime 2>/dev/null
   local fmt='%a %b %e %H:%M:%S %z %Y'
   [[ \${1-} == +* ]] && fmt=\${1#+}
-  strftime $fmt $EPOCHSECONDS
+
+  if [[ -z \${TZ-} ]]; then
+    strftime $fmt $EPOCHSECONDS
+    return
+  fi
+
+  # Parse TZ into a signed UTC offset in seconds.
+  # UTC+5 = 5 hours ahead of UTC (intuitive convention, not POSIX).
+  # Supports: UTC, UTC0, UTC±H, UTC±H:MM, ±HH:MM, ±HHMM
+  local _tz_off=0 _sign _h _m
+  if [[ $TZ == UTC || $TZ == UTC0 || $TZ == UTC+0 || $TZ == UTC-0 ]]; then
+    _tz_off=0
+  elif [[ $TZ =~ '^UTC([+-])([0-9]{1,2})(:([0-9]{2}))?$' ]]; then
+    _sign=\${match[1]} _h=\${match[2]} _m=\${match[4]:-0}
+    _tz_off=$(( _h * 3600 + _m * 60 ))
+    [[ $_sign == '-' ]] && _tz_off=$(( -_tz_off ))
+  elif [[ $TZ =~ '^([+-])([0-9]{1,2}):?([0-9]{2})$' ]]; then
+    _sign=\${match[1]} _h=\${match[2]} _m=\${match[3]}
+    _tz_off=$(( _h * 3600 + _m * 60 ))
+    [[ $_sign == '-' ]] && _tz_off=$(( -_tz_off ))
+  else
+    print -u2 "date: TZ=$TZ: named timezones are not supported in zsh-wasm (no tzdata); using browser local time"
+    strftime $fmt $EPOCHSECONDS
+    return
+  fi
+
+  # _ZW_LOCAL_TZ_SECS is injected by the JS runtime as -getTimezoneOffset()*60.
+  local _loff=\${_ZW_LOCAL_TZ_SECS:-0}
+  local _adj=$(( EPOCHSECONDS + _tz_off - _loff ))
+
+  # Build %z replacement string (e.g. +0530 or -0800).
+  local _tsign='+'; (( _tz_off < 0 )) && _tsign='-'
+  local _tabs=$(( _tz_off < 0 ? -_tz_off : _tz_off ))
+  local _thh=$(( _tabs / 3600 )) _tmm=$(( (_tabs % 3600) / 60 ))
+  local _thhs="\${_thh}" _tmms="\${_tmm}"
+  (( _thh < 10 )) && _thhs="0\${_thh}"
+  (( _tmm < 10 )) && _tmms="0\${_tmm}"
+  local _tzstr="\${_tsign}\${_thhs}\${_tmms}"
+
+  # Replace %z with a placeholder. In zsh \${var//pattern/rep}, leading % is an
+  # end-anchor, so we escape it: \\%z matches the literal two chars %z.
+  local _pfmt=\${fmt//\\%z/__TZSUB__}
+  local _out
+  _out=$(strftime "$_pfmt" $_adj)
+  print -- \${_out//__TZSUB__/$_tzstr}
 }
 sort() {
   local rev=0 num=0 uniq_flag=0 key=0
@@ -1050,9 +1094,10 @@ class WorkerPool {
     #dispatch(worker, job) {
         worker._job = job;
         const src = job.fork !== 'off' ? simulatePipes(job.src) : job.src;
+        const localTzOffSec = -new Date().getTimezoneOffset() * 60;
         worker.postMessage({
             type: 'run',
-            src: BUILTINS_PREAMBLE + src + '\n',
+            src: `_ZW_LOCAL_TZ_SECS=${localTzOffSec}\n` + BUILTINS_PREAMBLE + src + '\n',
             fs: job.fs ?? ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
             stdin: job.stdin ?? null,
