@@ -1,18 +1,22 @@
-# zsh-wasm — Project Context
+zsh-wasm — Project Context
+==========================
 
-## What This Is
+What This Is
+------------
 
 Zsh 5.9 compiled to WebAssembly via Emscripten. Runs a real, fully-functional
 zsh interpreter inside a browser tab, with no server required. Primary use case:
-executing zsh script examples in the [RubyCompared](https://github.com/brandonzylstra/RubyCompared)
-interactive cheatsheet site.
+executing zsh script examples in the [CodeCompared](https://github.com/brandonzylstra/CodeCompared)
+interactive cheatsheet site (https://codecompared.to, with per-language subdomains
+like https://ruby.codecompared.to).
 
 Published as `@brandon.zylstra/zsh-wasm` on npm; target unscoped name `zsh-wasm`
 once the npm account has sufficient history.
 
 ---
 
-## Owner Preferences
+Owner Preferences
+-----------------
 
 - No abbreviated variable names. `arr`, `lst`, `fn`, `str`, `buf`, `lang`, `cfg`
   are all unacceptable in new code. Use meaningful names.
@@ -20,33 +24,36 @@ once the npm account has sufficient history.
   two emoji that symbolize the content.
 - All planning work lives in `docs/PLAN.md` (general roadmap) and `docs/NPM.md`
   (npm publish checklist). Update them when tasks complete or new work is identified.
-- `docs/RUBYCOMPARED.md` documents the steps to make this package available as an
-  offline-capable runtime in RubyCompared — update it when versions change.
+- `docs/CODECOMPARED.md` documents the steps to make this package available as an
+  offline-capable runtime in CodeCompared — update it when versions change.
 
 ---
 
-## Key Files
+Key Files
+---------
 
-| File | Purpose |
-|------|---------|
-| `bin/build` | Main Emscripten build script; outputs `web/zsh.js` + `web/zsh.wasm` |
-| `web/zsh.js` | Emscripten loader (build output, committed to git) |
-| `web/zsh.wasm` | Compiled Zsh 5.9 binary (build output, committed) |
-| `web/zsh-runtime.js` | JS wrapper: `runZshScript(src, opts)` → `{ stdout, stderr }` |
-| `web/zsh-worker.js` | Web Worker that isolates WASM execution from the main thread |
-| `web/zsh-loader.js` | Lazy-loader helper used by the RubyCompared runner |
-| `web/index.html` | Interactive demo page |
-| `web/test.html` | Playwright test harness (235 test cases) |
-| `npm/package.json` | npm package manifest for `@brandon.zylstra/zsh-wasm` |
-| `npm/index.d.ts` | TypeScript type declarations |
-| `docs/PLAN.md` | Roadmap: compiled builtins, pipe simulation, idbfs, etc. |
-| `docs/NPM.md` | npm publish checklist |
-| `docs/RUBYCOMPARED.md` | Steps to release a version and update RubyCompared |
-| `.github/workflows/deploy.yaml` | Deploys `web/` to GitHub Pages on push to main |
+| File                                 | Purpose                                                                          |
+| ------------------------------------ | -------------------------------------------------------------------------------- |
+| `bin/build`                          | Main Emscripten build script; outputs `web/zsh.js` + `web/zsh.wasm`              |
+| `web/zsh.js`                         | Emscripten loader (build output, committed to git)                               |
+| `web/zsh.wasm`                       | Compiled Zsh 5.9 binary (build output, committed)                                |
+| `web/zsh-runtime.js`                 | JS wrapper: `runZshScript(src, opts)` → `{ stdout, stderr }`                     |
+| `web/zsh-worker.js`                  | Web Worker that isolates WASM execution from the main thread                     |
+| `web/zsh-loader.js`                  | Lazy-loader helper used by the CodeCompared runner                               |
+| `web/index.html`                     | Interactive demo page                                                            |
+| `web/test.html`                      | Playwright test harness (235 test cases)                                         |
+| `npm/package.json`                   | npm package manifest for `@brandon.zylstra/zsh-wasm`                             |
+| `npm/index.d.ts`                     | TypeScript type declarations                                                     |
+| `docs/PLAN.md`                       | Roadmap: compiled builtins, pipe simulation, idbfs, etc.                         |
+| `docs/NPM.md`                        | npm publish checklist                                                            |
+| `docs/CODECOMPARED.md`               | Steps to release a version and update CodeCompared                               |
+| `.github/workflows/deploy.yaml`      | Deploys `web/` to GitHub Pages on push to main                                   |
+| `.github/workflows/publish-npm.yaml` | Publishes `npm/` to the npm registry on `v*` tag push (needs `NPM_TOKEN` secret) |
 
 ---
 
-## Architecture
+Architecture
+------------
 
 ```
 Main thread                 Web Worker
@@ -67,7 +74,8 @@ from a clean WASM module instance.
 
 ---
 
-## BUILTINS_PREAMBLE
+BUILTINS_PREAMBLE
+-----------------
 
 Because `fork()` is not available in WASM, external utilities are shimmed as
 zsh functions that run inside the same WASM process. The preamble is prepended
@@ -82,7 +90,8 @@ includes all three.
 
 ---
 
-## Building
+Building
+--------
 
 ```zsh
 # Prerequisites: Emscripten, zsh-5.9 source at ./zsh-5.9/
@@ -97,19 +106,22 @@ npx playwright test
 
 ---
 
-## Versioning and Releases
+Versioning and Releases
+-----------------------
 
-See `docs/RUBYCOMPARED.md` for the full release-and-integration workflow.
+See `docs/CODECOMPARED.md` for the full release-and-integration workflow.
 
 Short version:
 1. Bump `npm/package.json` `"version"` field
 2. `bin/build --out npm/` to populate the npm package
-3. Commit, tag (`git tag vX.Y.Z`), push tag
-4. Update three places in RubyCompared (headScripts URL, CACHE_GROUPS, LANGUAGE_RUNTIME_CACHES)
+3. Commit, tag (`git tag vX.Y.Z`), push tag — the tag push auto-publishes to
+   npm via `.github/workflows/publish-npm.yaml` (requires the `NPM_TOKEN` secret)
+4. Update three places in CodeCompared (headScripts URL, CACHE_GROUPS, LANGUAGE_RUNTIME_CACHES)
 
 ---
 
-## Known Limitations
+Known Limitations
+-----------------
 
 - **No `fork()`** — pipes between external processes don't work. Use temp files
   or here strings as workarounds. The `|` operator between two *shims* works only
