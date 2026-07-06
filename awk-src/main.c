@@ -149,6 +149,24 @@ int awk_main(int argc, char *argv[])
 	errorflag = 0;
 	compile_time = ERROR_PRINTING;
 
+	/* There is no fork() in wasm, so this builtin runs repeatedly inside one
+	 * long-lived process. A few globals otherwise persist between invocations
+	 * and corrupt later runs, so reset them to their process-start values:
+	 *  - beginloc/endloc accumulate BEGIN/END actions (each parse appends), so
+	 *    without this a second program re-runs the first program's BEGIN/END.
+	 *  - argno advances as input files are consumed and is never rewound, so a
+	 *    second file-reading program would start past ARGC and read nothing. */
+	{
+		extern Node *beginloc, *endloc;
+		extern int argno;
+		extern FILE *infile;
+		extern bool innew;
+		beginloc = endloc = NULL;
+		argno = 1;
+		infile = NULL;
+		innew = false;
+	}
+
 	setlocale(LC_CTYPE, "");
 	setlocale(LC_NUMERIC, "C"); /* for parsing cmdline & prog */
 	awk_mb_cur_max = MB_CUR_MAX;

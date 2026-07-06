@@ -61,6 +61,14 @@ bc_embed_main(int argc, const char* argv[])
 	char* name;
 	size_t len = strlen(BC_EXECPREFIX);
 
+	// There is no fork() in wasm, so this builtin runs repeatedly inside one
+	// long-lived process. bc keeps essentially all of its runtime state in the
+	// global vm_data struct, which is zero at process start and is what
+	// bc_vm_boot()/bc_vm_init() expect. Without resetting it, a second `bc`
+	// invocation inherits stale parser/program/input state and hangs. Zeroing it
+	// here restores the fresh-process starting condition for every invocation.
+	memset(&vm_data, 0, sizeof(vm_data));
+
 #if BC_ENABLE_NLS
 	// Must set the locale properly in order to have the right error messages.
 	vm->locale = setlocale(LC_ALL, "");
