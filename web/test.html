@@ -633,6 +633,20 @@ const tests = [
       script: "x=outer; (x=inner); echo $x",
       expected: 'outer',
       knownFail: true },
+    // case-pattern alternation: the `|` in `py|python)` must NOT be treated as a
+    // pipeline operator by simulatePipes() (regression: parse error near the pattern).
+    { name: 'case-alternation',
+      script: "for x in py js rb; do case $x in py|python) echo P ;; js|ts) echo J ;; *) echo O ;; esac; done",
+      expected: 'P\nJ\nO' },
+    // case with multiple alternates in one arm (a|b|c)) — all must stay literal.
+    { name: 'case-multi-alternation',
+      script: "for v in 5.9 6.0 4.2; do case $v in 5.*|5) echo cur ;; 6.*) echo next ;; *) echo old ;; esac; done",
+      expected: 'cur\nnext\nold' },
+    // glob qualifier *(.) selects regular files only — the `(.)` must NOT be
+    // rewritten to a `{ . }` subshell by simulatePipes() (regression: parse error near `}`).
+    { name: 'glob-qualifier-files',
+      script: "mkdir -p /tmp/gqt/sub; : > /tmp/gqt/a.txt; : > /tmp/gqt/b.txt; for f in /tmp/gqt/*(.); do echo \${f:t}; done",
+      expected: 'a.txt\nb.txt' },
     // pipe simulation: | transformed to temp-file chaining by simulatePipes()
     { name: 'pipe-simple',
       script: "echo hello | grep hello",

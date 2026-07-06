@@ -23,6 +23,14 @@ export interface RunOptions {
    * @see https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/SharedArrayBuffer#security_requirements
    */
   busySleepFallback?: boolean;
+  /**
+   * Milliseconds to wait for a script before giving up. If the run does not
+   * finish in time (e.g. an infinite loop, or a compiled tool such as `bc` that
+   * blocks when invoked more than once per run), the promise rejects with a
+   * timeout error and the underlying worker is terminated and replaced, so
+   * later runs are unaffected. Default: `30000`.
+   */
+  timeoutMs?: number;
 }
 
 export interface ZshResult {

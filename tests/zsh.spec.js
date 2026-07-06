@@ -38,3 +38,21 @@ test('sleep blocks for real when SharedArrayBuffer is available', async ({ page 
         expect(result.elapsed).toBeLessThan(2000);
     }
 });
+
+test('a hung run rejects with a timeout and the worker pool recovers', async ({ page }) => {
+    await page.goto('/test.html');
+    const result = await page.evaluate(async () => {
+        const { runZshScript } = await import('./zsh-runtime.js');
+        // bc hangs on its 2nd in-process invocation — a reliable way to wedge a worker.
+        let first;
+        try {
+            await runZshScript(`bc <<< '1+1'\nbc <<< '2+2'`, { timeoutMs: 4000 });
+            first = 'RESOLVED_UNEXPECTEDLY';
+        } catch (e) { first = String(e.message || e); }
+        // The pool must have replaced the wedged worker, so a later run still works.
+        const second = await runZshScript('echo recovered', { timeoutMs: 8000 });
+        return { first, second: second.stdout };
+    });
+    expect(result.first).toContain('timed out');
+    expect(result.second).toBe('recovered');
+});

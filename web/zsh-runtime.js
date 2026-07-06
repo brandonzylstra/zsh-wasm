@@ -939,14 +939,36 @@ function hasPipelineOp(src) {
     return / \| /.test(src);
 }
 
+// Looks ahead from just after a top-level `|` to decide whether it is a
+// case-pattern alternation (e.g. `python|py)` or `a|b|c)`) rather than a
+// pipeline operator. A pattern alternation reaches an unmatched `)` (the arm
+// opener) before any command terminator; a real pipeline does not. Other `|`
+// characters are neutral here because patterns may chain several alternates.
+function pipeIsCasePattern(src, from) {
+    let depth = 0, inSQ = false, inDQ = false;
+    for (let j = from; j < src.length; j++) {
+        const c = src[j];
+        if (inSQ) { if (c === "'") inSQ = false; continue; }
+        if (inDQ) { if (c === '"') inDQ = false; continue; }
+        if (c === '\\') { j++; continue; }
+        if (c === "'") { inSQ = true; continue; }
+        if (c === '"') { inDQ = true; continue; }
+        if (c === '(') { depth++; continue; }
+        if (c === ')') { if (depth === 0) return true; depth--; continue; }
+        if (depth === 0 && (c === ';' || c === '\n' || c === '&')) return false;
+    }
+    return false;
+}
+
 // Transforms `a | b | c` pipelines into sequential temp-file chaining so they work
 // without fork(): `{ a } >/tmp/_zpipe_0; { b } </tmp/_zpipe_0 >/tmp/_zpipe_1; { c } </tmp/_zpipe_1`
 //
 // Tracks quote/bracket depth to skip pipes inside strings and subexpressions.
-// Known limits: pipes inside heredoc content and bare case-pattern alternates (a|b) without
-// surrounding parens are not detected as non-pipes — both are rare in piping contexts.
+// Known limit: pipes inside heredoc content are not detected as non-pipes (rare
+// in piping contexts). Case-pattern alternates (`a|b)`) and glob qualifiers
+// (`*(.)`) are recognized and left untouched.
 //
-// fork option: 'simulate' (default, uses this fn) | 'off' (no-op, original behaviour)
+// fork option: 'simulate' (default, uses this fn) | 'off' (no-op, original behavior)
 //              Future: 'native' for a --with-threads wasm build with real fork().
 function simulatePipes(src) {
     const out = [];
@@ -999,15 +1021,21 @@ function simulatePipes(src) {
             // `((expr))` arithmetic — track as depth, no subshell transform.
             if (src[i+1] === '(') { depth++; buf.push(c); i++; continue; }
 
-            // Determine if this `(` opens a subshell: it must NOT follow an
-            // identifier (function call) or `=` (array assignment like `a=(...)`).
+            // Determine if this `(` opens a subshell. A subshell `(` sits at a
+            // command boundary: the start of the script, right after a separator
+            // (`;`, `|`, `&`, `(`, `{`), or after a shell keyword. If it instead
+            // follows a word (function call `foo(`), an `=` (array assign `a=(`),
+            // or a glob/pattern char with no space (glob qualifier `*(.)`), it is
+            // NOT a subshell and must be left untouched.
             const prevStr  = buf.join('').trimEnd();
             const prevWord = (prevStr.match(/(\w+)$/) ?? ['',''])[1];
             const isArrayAssign = prevStr.endsWith('='); // catches `a=(` and `a+=(`
+            const lastChar = prevStr.slice(-1);
+            const atCommandBoundary = prevStr === '' || ';|&({'.includes(lastChar);
             const shellKw = new Set(['if','then','else','elif','fi','do','done',
                                      'while','until','for','case','esac','in',
                                      'select','time','!','function']);
-            if (!isArrayAssign && (!prevWord || shellKw.has(prevWord))) {
+            if (!isArrayAssign && (atCommandBoundary || shellKw.has(prevWord))) {
                 // Subshell: collect content up to matching `)`, recursively transform, emit `{ ... }`.
                 i++; // skip opening `(`
                 const ss = i;
@@ -1036,6 +1064,8 @@ function simulatePipes(src) {
             const nx = src[i+1];
             if (nx === '|') { flush('||'); i += 2; continue; }
             if (nx === '&') { flush('|&'); i += 2; continue; }
+            // A case-pattern alternation (`foo|bar)`) is not a pipeline operator.
+            if (pipeIsCasePattern(src, i + 1)) { buf.push(c); i++; continue; }
             pipePos.push(buf.length); buf.push(c); i++; continue;
         }
         if (c === ';' || c === '\n')       { flush(c);    i++;    continue; }
@@ -1073,6 +1103,7 @@ class WorkerPool {
             } else if (data.type === 'result') {
                 const job = w._job;
                 w._job = null;
+                if (w._timer) { clearTimeout(w._timer); w._timer = null; }
                 let { stdout, stderr, exitCode } = data;
                 // Only inject the helpful pipe diagnostic when simulation is off and
                 // the script had a pipeline but produced no output at all.
@@ -1087,14 +1118,37 @@ class WorkerPool {
         };
         w.onerror = (e) => {
             const job = w._job;
+            if (w._timer) { clearTimeout(w._timer); w._timer = null; }
             if (job) { job.reject(e); w._job = null; }
         };
+    }
+
+    // Terminate a wedged/broken worker and spawn a replacement so the pool keeps
+    // its capacity. A terminated worker never sends 'ready', so without this a
+    // single hanging script (e.g. a tool that blocks on stdin) would freeze every
+    // later run behind the one stuck worker.
+    #retire(worker) {
+        worker.terminate();
+        this.#all   = this.#all.filter(w => w !== worker);
+        this.#ready = this.#ready.filter(w => w !== worker);
+        this.#spawn();
     }
 
     #dispatch(worker, job) {
         worker._job = job;
         const src = job.fork !== 'off' ? simulatePipes(job.src) : job.src;
         const localTzOffSec = -new Date().getTimezoneOffset() * 60;
+        worker._timer = setTimeout(() => {
+            const stuck = worker._job;
+            worker._job = null;
+            worker._timer = null;
+            this.#retire(worker);
+            if (stuck) stuck.reject(new Error(
+                `zsh-wasm: script timed out after ${Math.round(job.timeoutMs / 1000)}s — ` +
+                'likely an infinite loop or a command blocking on input that never arrives ' +
+                '(some compiled tools such as bc can only be invoked once per run). ' +
+                'The worker was restarted.'));
+        }, job.timeoutMs);
         worker.postMessage({
             type: 'run',
             src: `_ZW_LOCAL_TZ_SECS=${localTzOffSec}\n` + BUILTINS_PREAMBLE + src + '\n',
@@ -1105,9 +1159,9 @@ class WorkerPool {
         });
     }
 
-    run(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false } = {}) {
+    run(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false, timeoutMs = 30000 } = {}) {
         return new Promise((resolve, reject) => {
-            const job = { src, stdin, fs, fork, busySleepFallback, resolve, reject };
+            const job = { src, stdin, fs, fork, busySleepFallback, timeoutMs, resolve, reject };
             if (this.#ready.length > 0) {
                 this.#dispatch(this.#ready.shift(), job);
             } else {
@@ -1117,7 +1171,7 @@ class WorkerPool {
     }
 
     shutdown() {
-        for (const w of this.#all) w.terminate();
+        for (const w of this.#all) { if (w._timer) clearTimeout(w._timer); w.terminate(); }
         this.#all = [];
         this.#ready = [];
         for (const job of this.#pending) job.reject(new Error('WorkerPool shut down'));
@@ -1128,9 +1182,9 @@ class WorkerPool {
 // Lazy default pool — created on first runZshScript() call.
 let _defaultPool = null;
 
-export function runZshScript(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false } = {}) {
+export function runZshScript(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false, timeoutMs = 30000 } = {}) {
     if (!_defaultPool) _defaultPool = new WorkerPool(1);
-    return _defaultPool.run(src, { stdin, fs, fork, busySleepFallback });
+    return _defaultPool.run(src, { stdin, fs, fork, busySleepFallback, timeoutMs });
 }
 
 /** Create a pool of pre-warmed workers. Call pool.run(src, opts) and pool.shutdown(). */
