@@ -1,4 +1,5 @@
-# Project Plan — Beyond the Current Build
+Project Plan — Beyond the Current Build
+=======================================
 
 This document covers planned and proposed work beyond the npm publishing
 checklist (see `docs/NPM.md`). Items are ordered roughly by priority / effort
@@ -7,7 +8,8 @@ obstacles.
 
 ---
 
-## 1. Quick Wins
+1. Quick Wins
+-------------
 
 Small changes, high impact. Each of these removes a `knownFail` test or fixes a
 silent limitation.
@@ -113,7 +115,7 @@ elegant but avoids any nesting edge cases). Multi-file mode with stdin mixing
 
 **Status:** Complete. Both shims drain stdin when called with no file args.
 `cat-stdin` and `wc-stdin` tests added and passing. wc strips trailing newline
-from stdin content (matching `$(<file)` behaviour) to avoid off-by-one in
+from stdin content (matching `$(<file)` behavior) to avoid off-by-one in
 line counting.
 
 **Checklist:**
@@ -139,7 +141,8 @@ from `IFS= read -r -d '' content` instead of `$(<$f)`.
 
 ---
 
-## 2. Compiled grep (`--with-grep`)
+2. Compiled grep (--with-grep)
+------------------------------
 
 **Status:** Planned. The grep shim covers the most common cases but has hard
 limits: no `-A`/`-B`/`-C` context lines, no `-r`/`-R` recursive (already
@@ -220,7 +223,8 @@ static int bin_grep(char *name, char **args, Options ops, int func) {
 
 ---
 
-## 3. Compiled `bc` ✓ done
+3. Compiled bc ✓ done
+---------------------
 
 **Status:** Complete. Gavin Howard's bc v7.0.3 (BSD-2-Clause) compiled into
 the wasm binary as a zsh builtin via `bin/build --with-bc`. Tests: bc-basic,
@@ -252,8 +256,16 @@ of portable C. No yacc/flex, explicitly designed for portability.
   compiles and runs strgen automatically
 - `BC_ENABLE_EXTRA_MATH=0` disables the `rand()`/`irand()` extension that
   reads `/dev/urandom` — removes a wasm compatibility risk
-- In wasm, each `runZshScript()` call creates a fresh Worker, so bc global
-  state (`vm_data`) is naturally reset; no `bc_full_reset()` needed
+- A fresh Worker per `runZshScript()` call resets bc global state (`vm_data`)
+  *across* runs — but a single script may invoke `bc` more than once, and those
+  invocations share one process. Without a reset, the 2nd `bc` call inherited
+  stale `vm_data` and hung. Fixed by `memset(&vm_data, 0, sizeof(vm_data))` at
+  the top of `bc_embed_main()` (bc-src/main.c). awk needed the analogous fix:
+  reset `beginloc`/`endloc` (BEGIN/END action lists that accumulate per parse)
+  and `argno`/`infile` (input cursor) in `awk_main()`.
+- Known remaining limitation: the compiled awk mangles multibyte characters
+  (e.g. `→`) because the wasm locale is `C` (`MB_CUR_MAX == 1`). Use ASCII in
+  awk programs, or teach awk UTF-8 awareness (future work).
 
 **Obstacles:**
 
@@ -284,7 +296,8 @@ of portable C. No yacc/flex, explicitly designed for portability.
 
 ---
 
-## 4. `find` shim
+4. find shim
+------------
 
 **Status:** Complete. Shim in `BUILTINS_PREAMBLE` in `web/zsh-runtime.js`.
 
@@ -354,7 +367,8 @@ find() {
 
 ---
 
-## 5. Compiled diff (`--with-diff`)
+5. Compiled diff (--with-diff)
+------------------------------
 
 **Status:** Possible. Not yet started. Lower priority than grep/bc.
 
@@ -373,7 +387,8 @@ allocation for large file diffs, which is not a concern for typical script use.
 
 ---
 
-## 6. Pipe simulation (long-term research)
+6. Pipe simulation (long-term research)
+---------------------------------------
 
 **Status:** Research / uncertain. The single biggest real-world limitation.
 `echo hello | grep hello` fails because both sides of `|` need separate
@@ -422,7 +437,8 @@ lines=("${(@f)$(echo hello)}"); for l in $lines; do [[ $l =~ hello ]] && echo $l
 
 ---
 
-## 7. idbfs testing
+7. idbfs testing
+----------------
 
 **Status:** The `{ fs: 'idbfs' }` option exists and the code path is wired, but
 it has never been explicitly tested. If it's broken, we don't know.
@@ -444,7 +460,8 @@ real HTTP server. Tests must run against the HTTP server (already the case with
 
 ---
 
-## 8. Module install-on-demand (prerequisite for jq and future tools)
+8. Module install-on-demand (prerequisite for jq and future tools)
+------------------------------------------------------------------
 
 **Status:** Architectural research. Currently all compiled-in tools are baked
 into the wasm binary at build time. Each `--with-X` flag increases binary size
@@ -488,7 +505,7 @@ becomes a real problem. jq specifically is deferred until Option A is viable.
   - Current recommendation: include sed, awk, grep, bc (once built)
   - This makes the published package self-contained for most scripting use
 - [ ] Document the `--with-X` flags so downstream users who build from source
-      know how to customise
+      know how to customize
 
 **Checklist (Option A — future research):**
 - [ ] Spike: build a trivial "hello" side module and load it into the main wasm
@@ -497,7 +514,8 @@ becomes a real problem. jq specifically is deferred until Option A is viable.
 
 ---
 
-## 9. jq (deferred — needs install-on-demand)
+9. jq (deferred — needs install-on-demand)
+------------------------------------------
 
 **Status:** Deferred. jq is not installed by default on all systems and carries
 a heavier weight (its own query language, PCRE regex engine, ~150 KLOC). It
@@ -516,7 +534,8 @@ than a bloat-or-skip binary decision.
 
 ---
 
-## 10. Demo site improvements
+10. Demo site improvements
+--------------------------
 
 **Status:** `web/index.html` exists but predates sed, awk, and most shims.
 
@@ -531,19 +550,20 @@ than a bloat-or-skip binary decision.
 
 ---
 
-## Priority Order Summary
+Priority Order Summary
+----------------------
 
-| # | Item | Effort | Removes knownFail | Impact |
-|---|------|--------|-------------------|--------|
-| 1a | zsh/mathfunc static build | 30 min | yes | low |
-| 1b | grep shim stdin | 1 hr | yes | medium |
-| 1c | wc/cat stdin | 1 hr | no | low |
-| 2 | Compiled grep | 2–3 days | yes | high |
-| 3 | Compiled bc | 2–3 days | no | medium |
-| 4 | find shim | 2 hr | no | medium |
-| 5 | Compiled diff | 1–2 days | no | low |
-| 6 | Pipe simulation | weeks | yes | very high |
-| 7 | idbfs testing | 2 hr | no | medium |
-| 8 | Module install-on-demand | weeks | no | high (prerequisite for jq) |
-| 9 | jq | weeks | no | high (after #8) |
-| 10 | Demo improvements | 2–4 hr | no | medium |
+| #   | Item                      | Effort   | Removes knownFail | Impact                     |
+| --- | ------------------------- | -------- | ----------------- | -------------------------- |
+| 1a  | zsh/mathfunc static build | 30 min   | yes               | low                        |
+| 1b  | grep shim stdin           | 1 hr     | yes               | medium                     |
+| 1c  | wc/cat stdin              | 1 hr     | no                | low                        |
+| 2   | Compiled grep             | 2–3 days | yes               | high                       |
+| 3   | Compiled bc               | 2–3 days | no                | medium                     |
+| 4   | find shim                 | 2 hr     | no                | medium                     |
+| 5   | Compiled diff             | 1–2 days | no                | low                        |
+| 6   | Pipe simulation           | weeks    | yes               | very high                  |
+| 7   | idbfs testing             | 2 hr     | no                | medium                     |
+| 8   | Module install-on-demand  | weeks    | no                | high (prerequisite for jq) |
+| 9   | jq                        | weeks    | no                | high (after #8)            |
+| 10  | Demo improvements         | 2–4 hr   | no                | medium                     |
