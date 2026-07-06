@@ -34,14 +34,18 @@ jobs:
           fi
           echo "Publishing version $packageVersion"
 
-      - name: Verify built files are present
-        working-directory: npm
+      - name: Stage built files from web/
         run: |
+          # The wasm build requires Emscripten (too heavy for CI), so npm/ does
+          # not track the binaries — but web/ commits them. Copy the committed
+          # build outputs into npm/ before publishing (same set bin/build --out
+          # npm/ produces). Whatever is in web/ at the tagged commit is what ships.
           for builtFile in zsh.js zsh.wasm zsh-runtime.js zsh-worker.js; do
-            if [ ! -f "$builtFile" ]; then
-              echo "MISSING: npm/$builtFile — run bin/build --out npm/ before tagging" >&2
+            if [ ! -f "web/$builtFile" ]; then
+              echo "MISSING: web/$builtFile at this tag — cannot publish" >&2
               exit 1
             fi
+            cp "web/$builtFile" "npm/$builtFile"
           done
 
       - name: Publish

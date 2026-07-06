@@ -100,18 +100,20 @@ add an Emscripten build step before the release step using `mymindstorm/setup-em
 Step 2b: Publish to npm on Tag (already wired up)
 -------------------------------------------------
 
-`.github/workflows/publish-npm.yaml` runs on any `v*` tag push and publishes the
-pre-built `npm/` directory to the npm registry. Like the GitHub Pages deploy and
-the release workflow, it does NOT rebuild the WASM — it publishes whatever is
-committed under `npm/` at tag time, so you must run `bin/build --out npm/` and
-commit before tagging.
+`.github/workflows/publish-npm.yaml` runs on any `v*` tag push and publishes to
+the npm registry. Like the GitHub Pages deploy and the release workflow, it does
+NOT rebuild the WASM (Emscripten is too heavy for CI). The npm binary artifacts
+are gitignored, so the workflow copies the committed build outputs from `web/`
+(`zsh.js`, `zsh.wasm`, `zsh-runtime.js`, `zsh-worker.js`) into `npm/` and then
+publishes. Whatever is committed under `web/` at the tagged commit is what ships,
+so run `bin/build` and commit the updated `web/` outputs before tagging.
 
 The workflow guards against two common mistakes:
 
 - **Version mismatch** — it fails if the tag (e.g. `v0.1.5`) does not match the
   `version` field in `npm/package.json`.
 - **Missing build output** — it fails if any of `zsh.js`, `zsh.wasm`,
-  `zsh-runtime.js`, `zsh-worker.js` are absent from `npm/`.
+  `zsh-runtime.js`, `zsh-worker.js` are absent from `web/`.
 
 It publishes with `--provenance`, which is why the workflow requests
 `id-token: write` permission.
