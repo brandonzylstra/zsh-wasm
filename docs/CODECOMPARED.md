@@ -5,12 +5,18 @@ This document covers everything needed to make zsh-wasm available as an offline-
 language runtime in the [CodeCompared](https://github.com/brandonzylstra/CodeCompared)
 interactive cheatsheet site.
 
-CodeCompared lives at **https://codecompared.to**, with one subdomain per language:
-**https://ruby.codecompared.to**, **https://python.codecompared.to**,
-**https://haskell.codecompared.to**, and so on. Zsh examples run inside the Ruby
-sub-site (**https://ruby.codecompared.to**), so the paths and filenames in Step 3
-below are relative to that sub-site's repo/deployment — verify them against the
-repo, since the rename from RubyCompared may have moved some of them.
+CodeCompared lives at **https://codecompared.to**. It is a single Astro repo
+(`github.com/brandonzylstra/CodeCompared`) that builds a **separate Cloudflare
+Pages project per anchor language**, each attached to its own subdomain —
+`ruby.codecompared.to` → the `codecompared-ruby` Pages project (Ruby-anchor
+content only), `python.codecompared.to` → `codecompared-python`, and so on.
+Paths are served at their natural depth (no rewrites), so a comparison page lives
+at `/<anchor>/<slug>/`.
+
+Zsh is a Ruby-anchor comparison, so its page is `/ruby/zsh/` on the Ruby Pages
+project — full URL **https://ruby.codecompared.to/ruby/zsh/**. All the files the
+integration touches (`lib/languages.js`, `components/ServiceWorker.astro`,
+`public/sw.js`, `pages/ruby/zsh.astro`) live in that one repo.
 
 The core requirement is **versioned, immutable CDN URLs** — jsDelivr can serve any
 file from a GitHub repo at a specific tag, and that URL never changes. CodeCompared's
@@ -162,8 +168,9 @@ you add the Step 2 release workflow) a GitHub Release.
 Step 3: Update CodeCompared
 ---------------------------
 
-Once the tag is live, make these four changes in the CodeCompared repo (the Ruby
-sub-site that serves the Zsh page, https://ruby.codecompared.to):
+Once the tag is live, make these four changes in the CodeCompared repo. The Zsh
+page is part of the Ruby anchor, so it ships in the `codecompared-ruby` Pages
+project served at https://ruby.codecompared.to/ruby/zsh/:
 
 ### 3a. `lib/languages.js` — pin the head script URL and mark offline-capable
 
@@ -187,7 +194,7 @@ but only the jsDelivr URL is safe to cache permanently.
   name:    'Zsh',
   color:   '#89e051',
   version: '0.1.4',
-  pageUrl: '/zsh/',
+  pageUrl: groupPageUrl('zsh'), // resolves to /ruby/zsh/ on the Ruby anchor
   cdnUrls: [
     'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.1.4/web/zsh.js',
     'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.1.4/web/zsh.wasm',
