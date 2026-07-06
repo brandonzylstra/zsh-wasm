@@ -544,6 +544,20 @@ const tests = [
     { name: 'awk-split-fn',
       script: "awk 'BEGIN{n=split(\"a:b:c\",arr,\":\"); print n, arr[2]}'",
       expected: '3 b' },
+    // re-entrancy: compiled tools are invoked repeatedly in one wasm process (no
+    // fork). awk must reset beginloc/endloc so a 2nd program does not re-run the
+    // 1st's BEGIN, and argno/infile so a 2nd file-reading program still reads.
+    { name: 'awk-twice-begin',
+      script: "awk 'BEGIN{print 1}'; awk 'BEGIN{print 2}'",
+      expected: '1\n2' },
+    { name: 'awk-twice-file',
+      script: "printf 'a 85\\nb 92\\n' > /tmp/aw2.txt\nawk '{print $1}' /tmp/aw2.txt\nawk '$2>=90{print $1}' /tmp/aw2.txt",
+      expected: 'a\nb\nb' },
+    // re-entrancy: bc keeps all state in vm_data, which must be reset each call
+    // or the 2nd invocation hangs. Verify several bc calls in one run succeed.
+    { name: 'bc-multiple',
+      script: "bc <<< '1+1'\nbc <<< '2*3'\nbc <<< 'scale=2; 10/3'",
+      expected: '2\n6\n3.33' },
     // sed: back-references
     { name: 'sed-backref',
       script: "printf 'foo\\n' > /tmp/sbr.txt\nsed 's/\\(foo\\)/[\\1]/' /tmp/sbr.txt",

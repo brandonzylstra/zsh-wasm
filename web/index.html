@@ -808,7 +808,7 @@ echo "=== print fields ==="
 awk '{print $1 " scored " $2}' /tmp/scores.txt
 
 echo "=== filter ==="
-awk '$2 >= 90 {print $1, "→ A"}' /tmp/scores.txt
+awk '$2 >= 90 {print $1, "-> A"}' /tmp/scores.txt
 
 echo "=== aggregate ==="
 awk '{sum += $2; n++} END {printf "avg: %.1f  max: %d\n", sum/n, max}

@@ -43,10 +43,10 @@ test('a hung run rejects with a timeout and the worker pool recovers', async ({ 
     await page.goto('/test.html');
     const result = await page.evaluate(async () => {
         const { runZshScript } = await import('./zsh-runtime.js');
-        // bc hangs on its 2nd in-process invocation — a reliable way to wedge a worker.
+        // A tight infinite loop never yields in synchronous wasm — a reliable wedge.
         let first;
         try {
-            await runZshScript(`bc <<< '1+1'\nbc <<< '2+2'`, { timeoutMs: 4000 });
+            await runZshScript('while true; do :; done', { timeoutMs: 4000 });
             first = 'RESOLVED_UNEXPECTEDLY';
         } catch (e) { first = String(e.message || e); }
         // The pool must have replaced the wedged worker, so a later run still works.
