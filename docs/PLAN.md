@@ -1,3 +1,32 @@
+### 1d. stdin/pipe correctness in the coreutils shims ✓ done
+
+Found while diffing every shim against real zsh 5.9 rather than only running the
+existing tests. Four bugs, all invisible to the suite because **every shim test
+used FILE arguments** — and `$(<file)` strips trailing newlines while
+`IFS= read -r -d ''` does not.
+
+1. **The phantom empty element.** Splitting newline-terminated stdin with
+   `${(@f)…}` yields a trailing empty element. That one defect produced three
+   different symptoms: `sort` emitted a leading blank line, `tail -n N` returned
+   N-1 real lines, and `head -n N` *after a sort* consumed the blank as a line.
+   Fixed by stripping the trailing newline at all five line-splitting stdin
+   reads (head, tail, grep, sort, uniq), matching what `wc` and `base64`
+   already did.
+2. **`uniq` discarded every flag.** `-c` silently behaved as a plain `uniq`, so
+   the counts just vanished. Now supports `-c`, `-d` and `-u`.
+3. **`cut` had no stdin branch at all** — it looped over file operands only, so
+   any piped `cut` produced *no output whatsoever*.
+
+The one piped `sort | head` test that did exist used `printf 'c\na\nb'` with no
+trailing newline, which is precisely how it dodged the bug for so long.
+
+12 stdin/pipe regression tests added to `web/test.html`; 9 of them fail against
+the unpatched runtime.
+
+**Known, deliberate divergence:** `wc` prints unpadded counts (`3`), where BSD
+`wc` pads to a column (`       3`). The existing tests encode the unpadded form
+as the project convention, and GNU `wc` agrees with it, so this was left alone.
+
 Project Plan — Beyond the Current Build
 =======================================
 

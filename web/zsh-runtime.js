@@ -130,6 +130,7 @@ head() {
       for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[1,$n]}; done
     else
       IFS= read -r -d '' _stdin
+      _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
       lines=("\${(@f)_stdin}")
       print -l -- \${lines[1,$n]}
     fi
@@ -155,6 +156,7 @@ tail() {
       for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[-$n,-1]}; done
     else
       IFS= read -r -d '' _stdin
+      _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
       lines=("\${(@f)_stdin}")
       print -l -- \${lines[-$n,-1]}
     fi
@@ -215,6 +217,7 @@ grep() {
   for _src in "\${(@)_srcs}"; do
     if [[ $_src == - ]]; then
       IFS= read -r -d '' _stdin
+      _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
       lines=("\${(@f)_stdin}")
     else
       lines=("\${(@f)$(<$_src)}")
@@ -429,6 +432,7 @@ sort() {
   for f in $args; do lines+=("\${(@f)$(<$f)}"); done
   if (( !\${#args} )); then
     IFS= read -r -d '' _stdin
+    _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
     lines=("\${(@f)_stdin}")
   fi
   if (( key > 0 )); then
@@ -463,19 +467,45 @@ sort() {
   (( \${#lines} )) && print -l -- "\${(@)lines}"
 }
 uniq() {
+  # -c prefixes each run with its count, -d shows only repeated runs, -u only
+  # non-repeated ones. Previously EVERY flag was discarded, so 'uniq -c' silently
+  # behaved as a plain uniq — the counts just vanished.
+  local _count=0 _dups_only=0 _uniq_only=0
   local -a args
-  for a; do [[ $a != -* ]] && args+=($a); done
+  for a; do
+    if [[ $a == -* ]]; then
+      [[ $a == *c* ]] && _count=1
+      [[ $a == *d* ]] && _dups_only=1
+      [[ $a == *u* ]] && _uniq_only=1
+    else
+      args+=($a)
+    fi
+  done
   local -a lines
-  local prev line first=1 _stdin
+  local prev line first=1 _stdin _run=0
   if (( \${#args} )); then
     lines=("\${(@f)$(<$args[1])}")
   else
     IFS= read -r -d '' _stdin
+    _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
     lines=("\${(@f)_stdin}")
   fi
+  _zw_uniq_emit() {
+    (( _run == 0 )) && return
+    (( _dups_only && _run < 2 )) && return
+    (( _uniq_only && _run > 1 )) && return
+    if (( _count )); then printf '%4d %s\\n' $_run "$prev"
+    else                  print -- "$prev"
+    fi
+  }
   for line in "\${(@)lines}"; do
-    if (( first )) || [[ $line != $prev ]]; then print -- "$line"; prev=$line; first=0; fi
+    if (( first )); then prev=$line; _run=1; first=0
+    elif [[ $line == $prev ]]; then (( _run++ ))
+    else _zw_uniq_emit; prev=$line; _run=1
+    fi
   done
+  _zw_uniq_emit
+  unfunction _zw_uniq_emit
 }
 cut() {
   local delim=$'\\t' fields='' chars=''
@@ -493,11 +523,20 @@ cut() {
     esac
     shift
   done
-  local f line cs ss ee result fspec s e _jo _jf _o
+  local f line cs ss ee result fspec s e _jo _jf _o _cutin
   local sep=$'\\x01'
-  local -a lines parts out
-  for f in $args; do
-    lines=("\${(@f)$(<$f)}")
+  local -a lines parts out sources
+  # With no file operands, cut reads stdin. Without this branch the loop below
+  # iterated an empty list, so every piped 'cut' produced NO OUTPUT AT ALL.
+  (( \${#args} )) && sources=("\${(@)args}") || sources=('-')
+  for f in "\${(@)sources}"; do
+    if [[ $f == - ]]; then
+      IFS= read -r -d '' _cutin
+      _cutin=\${_cutin%$'\\n'}
+      lines=("\${(@f)_cutin}")
+    else
+      lines=("\${(@f)$(<$f)}")
+    fi
     for line in "\${(@)lines}"; do
       if [[ -n $chars ]]; then
         result=''

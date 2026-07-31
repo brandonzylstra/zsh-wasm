@@ -1,7 +1,7 @@
 {
   "name": "@brandon.zylstra/zsh-wasm",
-  "version": "0.1.5",
-  "description": "Zsh 5.9 compiled to WebAssembly — run a real zsh interpreter in the browser",
+  "version": "0.1.6",
+  "description": "Zsh 5.9 compiled to WebAssembly \u2014 run a real zsh interpreter in the browser",
   "type": "module",
   "main": "zsh-runtime.js",
   "types": "index.d.ts",
@@ -18,11 +18,20 @@
     "zsh.js",
     "zsh.wasm"
   ],
-  "keywords": ["zsh", "shell", "wasm", "webassembly", "browser", "emscripten"],
+  "keywords": [
+    "zsh",
+    "shell",
+    "wasm",
+    "webassembly",
+    "browser",
+    "emscripten"
+  ],
   "license": "Zsh",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/brandonzylstra/zsh-wasm.git"
   },
-  "sideEffects": ["zsh.js"]
+  "sideEffects": [
+    "zsh.js"
+  ]
 }

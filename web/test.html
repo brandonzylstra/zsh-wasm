@@ -997,6 +997,52 @@ const tests = [
       },
       check: r => r.stdout.trim() === 'ok' && r._elapsed >= 150,
       expected: 'stdout=ok and elapsed>=150ms' },
+
+    // ── stdin/pipe regression tests ────────────────────────────────────────
+    // Every coreutils shim above was only ever exercised with FILE arguments,
+    // and $(<file) strips trailing newlines while `read -r -d ''` does not. That
+    // blind spot hid four real bugs: the phantom empty element left by (@f) on
+    // newline-terminated stdin (breaking sort, head-after-sort and tail), uniq
+    // discarding every flag including -c, and cut having no stdin branch at all
+    // so piped input produced NO output. Each case below is verified against
+    // real zsh 5.9. Note the trailing newlines — the older piped test used
+    // printf 'c\\na\\nb' WITHOUT one, which is exactly how it dodged the bug.
+    { name: 'pipe-sort',
+      script: "printf 'b\\na\\nc\\n' | sort",
+      expected: 'a\nb\nc' },
+    { name: 'pipe-sort-head',
+      script: "printf 'c\\na\\nb\\n' | sort | head -n 2",
+      expected: 'a\nb' },
+    { name: 'pipe-head-count',
+      script: "printf 'l1\\nl2\\nl3\\nl4\\n' | head -n 3",
+      expected: 'l1\nl2\nl3' },
+    { name: 'pipe-tail',
+      script: "printf 'a\\nb\\nc\\nd\\n' | tail -n 2",
+      expected: 'c\nd' },
+    { name: 'pipe-grep',
+      script: "printf 'apple\\nbanana\\n' | grep an",
+      expected: 'banana' },
+    { name: 'pipe-uniq-c',
+      script: "printf 'a\\na\\nb\\n' | uniq -c",
+      expected: '   2 a\n   1 b' },
+    { name: 'pipe-uniq-d',
+      script: "printf 'a\\na\\nb\\n' | uniq -d",
+      expected: 'a' },
+    { name: 'pipe-uniq-u',
+      script: "printf 'a\\na\\nb\\n' | uniq -u",
+      expected: 'b' },
+    { name: 'pipe-sort-uniq-c',
+      script: "printf 'apple\\nbanana\\napple\\n' | sort | uniq -c",
+      expected: '   2 apple\n   1 banana' },
+    { name: 'pipe-cut-f',
+      script: "echo 'a:b:c' | cut -d: -f2",
+      expected: 'b' },
+    { name: 'pipe-cut-range',
+      script: "printf 'a:b:c:d\\n' | cut -d: -f2-3",
+      expected: 'b:c' },
+    { name: 'pipe-cut-c',
+      script: "echo abcdef | cut -c1-3",
+      expected: 'abc' },
 ];
 
 const tbody = document.getElementById('results');

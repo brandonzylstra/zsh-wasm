@@ -20,3 +20,6 @@ npm/zsh-worker.js
 node_modules/
 package-lock.json
 test-results/
+
+# Agent/dev scratch space — never commit
+.scratch/

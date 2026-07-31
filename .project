@@ -1,0 +1,7 @@
+alias claude-log=less -R +F "/tmp/throttling.log"
+
+
+deploy() {
+  git push origin main
+}
+
