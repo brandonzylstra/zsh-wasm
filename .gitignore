@@ -1,6 +1,7 @@
 build-zsh/
 build-sed/
 build-bc/
+build-sbase/
 build-awk/
 zsh-5.9/
 zsh-5.9.tar.xz

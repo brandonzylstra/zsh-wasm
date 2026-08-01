@@ -1,0 +1,7 @@
+name=zsh/sbase
+link=dynamic
+load=no
+
+autofeatures="b:cut b:sort b:wc"
+
+objects=""

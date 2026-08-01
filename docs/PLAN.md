@@ -249,7 +249,13 @@ Tests: `errexit-shims`, `errexit-stdin-shims`, `errexit-pipeline`,
 2. Compiled grep (--with-grep)
 ------------------------------
 
-**Status:** Planned. The grep shim covers the most common cases but has hard
+**Status:** Superseded by item 6d — take sbase's grep rather than porting
+OpenBSD's separately. The embedding work below is done once, in `sbase-src/`,
+for every tool at a time; the notes here are kept because the *capability* gaps
+they list (context lines, `-w`, `-l`, a real regex engine) are still the reason
+to want a compiled grep at all.
+
+**Original status:** Planned. The grep shim covers the most common cases but has hard
 limits: no `-A`/`-B`/`-C` context lines, no `-r`/`-R` recursive (already
 handled by zsh globs), no `-w` word-boundary, no `-l` list-filenames, no `-m`
 max-count, and the ERE implementation relies on zsh's `=~` which may differ
@@ -706,26 +712,94 @@ Unknowns worth measuring rather than guessing: nobody appears to have built
 sbase under Emscripten, several tools are marked partial or non-UTF-8 in its
 README, and the wasm size cost is unmeasured.
 
-**Next step — a spike, not a port.** Take `wc`, `sort` and `cut`: the three
-whose shims produced wrong answers on 2026-07-31/08-01. Compile them from sbase
-as one zsh module using the sed/awk/bc pattern, then measure three things: the
-wasm growth, whether the existing tests for those commands still pass unchanged,
-and how much of `embed/embed_stdin.h` and the per-invocation reset dance is
-still needed once `eprintf` is the only exit path. Decide on the other 24 from
-those numbers.
+### Spike results (2026-08-01)
 
-Until then the shims stay, and the note in 1d about `wc`'s unpadded output being
-a deliberate project convention still applies.
+`bin/build --with-sbase` compiles sbase's `wc`, `sort` and `cut` into the wasm
+binary as a `zsh/sbase` module — the three commands whose shims produced wrong
+answers on 2026-07-31/08-01. `sbase-src/PATCHES.md` records every change made to
+the upstream sources. **The spike says: adopt it.**
+
+**Fidelity.** Running the full 296-case suite against the compiled tools, with
+those three shims deleted from `BUILTINS_PREAMBLE`, gave **one failure**, and it
+was the compiled tool being right: `wc -l a b` prints a `total` line, which real
+wc does and the shim did not. The shim has since been fixed to match, so that
+test now passes against either implementation. Every other case — including all
+the pipeline tests, `sort -t, -k3 -rn`, `cut -d, -f2`, empty input — passed
+unchanged. A side-by-side against BSD's own wc/sort/cut on 14 further cases
+matched byte for byte, except for column padding, which is the deliberate
+project convention noted in 1d.
+
+**One upstream divergence**, found by the suite and fixed in three lines: sbase
+folds global modifiers into a sort key when `-k` is parsed, so `sort -k2 -n`
+sorted lexically while `sort -n -k2` sorted numerically. Both GNU and BSD sort
+treat those alike.
+
+**Size**, measured rather than estimated (`SBASE_TOOLS=wc bin/build --with-sbase`
+builds a subset for exactly this):
+
+| build                        | zsh.wasm    | delta      |
+| ---------------------------- | ----------- | ---------- |
+| baseline (shims only)        | 1291.0 KB   | —          |
+| + sbase `wc`                 | 1295.3 KB   | **+4.3 KB** |
+| + sbase `wc`, `sort`, `cut`  | 1315.3 KB   | +24.3 KB   |
+
+So 4.3 KB buys the shared `libutil`/`libutf`/glue *and* wc, and the two richer
+tools cost about 10 KB each. A straight-line extrapolation over 27 commands
+gives ~260 KB, but that over-counts: it extrapolates from the two most complex
+of the three. `basename`, `dirname`, `touch`, `seq`, `sleep`, `which` and
+`printenv` are far closer to wc. **150–250 KB (+12–19%) is the honest range**,
+and each tool's real cost is one subset build away from being known.
+
+**The other side of the ledger, which the size table does not show:** the
+preamble is prepended to and parsed by *every* `runZshScript()` call. Deleting
+those three shims removed 5,654 bytes of it, and the whole 32 KB preamble costs
+a measured **9.5 ms per run** (median of 7, `echo hi` with and without it).
+wasm is compiled once per worker and cached; the preamble is not. A full port
+buys most of that back on every single run — which on CodeCompared is once per
+example.
+
+**Effort, per tool:** a `reset_state()` for the file-scope statics (5–15 lines),
+and that is usually all. The two things that cost real time with sed and bc —
+hunting `exit()` calls and resetting getopt globals — did not arise: sbase
+funnels fatal errors through `eprintf`/`enprintf` in one file, and `arg.h`'s
+ARGBEGIN keeps its state in locals. Two symbols collided with one-true-awk
+(`concat`, `runetochar`) and were renamed at compile time, the same way the awk
+objects already rename theirs.
+
+**Two hazards worth knowing before porting the rest**, both found by running the
+code rather than reading it:
+
+1. `fshut()` calls `fclose()`, and every tool calls it on `stdin` and `stdout`.
+   As a program that is fine; as a builtin the first call takes the shell's
+   stdout with it. Patched once in `libutil/fshut.c`, so it is handled for every
+   tool that follows.
+2. Tools assume a fresh process. Anything file-scope has to be reset per call —
+   the same lesson as awk's `firsttime` and bc's `vm_data`, now with a shared
+   place to put it.
+
+**Recommendation:** continue, tool by tool, cheapest and buggiest first. Suggested
+order: `head`, `tail`, `uniq`, `tr`, `basename`, `dirname`, `seq`, `touch`,
+`which`, `printenv` (all small), then `grep`, `ls`, `find` (the ones that carry
+the most shim complexity, and where item 2's compiled-grep plan is superseded by
+just taking sbase's). Keep `base64` and `realpath` as shims — sbase has no
+equivalent. Measure the wasm after each, and delete each shim only once its
+tests pass unchanged.
 
 **Checklist:**
-- [x] Evaluate BusyBox/toybox as one bundle vs. individual ports (see above:
-      BusyBox ruled out on license, sbase recommended)
-- [ ] Spike: build sbase `wc`, `sort`, `cut` as one zsh module; measure wasm
-      growth and test-suite delta
-- [ ] Decide on the remaining 24 from the spike's numbers
-- [ ] Delete each shim from `BUILTINS_PREAMBLE` as its compiled version lands
-- [ ] `base64` and `realpath` have no sbase equivalent — keep those two shims,
-      or map `realpath` onto `readlink -f`
+- [x] Evaluate BusyBox/toybox as one bundle vs. individual ports (BusyBox ruled
+      out on license, sbase recommended)
+- [x] Spike: build sbase `wc`, `sort`, `cut` as one zsh module; measure wasm
+      growth and test-suite delta (`bin/build --with-sbase`)
+- [x] Decide: adopt. 1 test failure out of 296, and it was the shim being wrong.
+- [ ] Port the small tools next: head, tail, uniq, tr, basename, dirname, seq,
+      touch, which, printenv
+- [ ] Then the complex ones: grep, ls, find (this supersedes item 2's separate
+      OpenBSD-grep plan — take sbase's grep instead)
+- [ ] Delete each shim from `BUILTINS_PREAMBLE` as its compiled version lands,
+      and re-measure zsh.wasm each time
+- [ ] Switch the shipped build to `--with-sbase` once enough tools have landed
+      to be worth the size
+- [ ] `base64` and `realpath` have no sbase equivalent — keep those two shims
 
 ---
 
