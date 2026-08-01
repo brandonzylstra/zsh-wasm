@@ -639,8 +639,9 @@ lines=("${(@f)$(echo hello)}"); for l in $lines; do [[ $l =~ hello ]] && echo $l
 **Status:** Open. The remaining half of the "stop working around no-fork and
 fix it properly" pair — pipelines were the other half and are now done (6 above).
 
-`BUILTINS_PREAMBLE` in `web/zsh-runtime.js` is ~27 KB of zsh functions reimplementing 56
-coreutils commands. It is a workaround, and it behaves like one — four real bugs were found
+`BUILTINS_PREAMBLE` in `web/zsh-runtime.js` is ~32 KB of zsh functions reimplementing 29
+coreutils commands (the file defines 57 functions, but 25 of those are one-line stubs for
+unavailable binaries like curl and git, and 3 are internal helpers). It is a workaround, and it behaves like one — four real bugs were found
 in it on 2026-07-31 (see 1d above), all invisible to a test suite that only exercised file
 arguments.
 
