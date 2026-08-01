@@ -78,15 +78,15 @@ ranges, in-place editing, back-references), awk (field splitting, `-F`,
 `length`, `printf`, user variables), here strings (`<<<`), heredocs, `read -A`,
 `typeset -i`, arithmetic (modulo, negative), `file-test` operators
 (`-f`/`-d`/`-e`/`-s`), parameter join with custom separator, string/parameter
-operations, pipe simulation (`a | b | c` rewritten to temp-file chaining),
-subshell simulation (`(cmd)` rewritten to `{ cmd }` at top level),
-`fork: 'off'` no-pipe path, `createPool`/`shutdownDefaultPool` (including
+operations, pipelines (`a | b | c`, `|&`, inside `$( )`/functions/loops, and
+into the compiled sed/awk/bc), subshells,
+`createPool`/`shutdownDefaultPool` (including
 parallel execution via `createPool(2)`), extended grep (`-r -l -o -e -m`),
 `head -c`/`tail -c` byte-count mode, `which`, `realpath`, `ln`, and `base64`/`base64 -d`.
 
 Known limitations (2 `knownFail`): (1) subshell variable mutations leak into the
-outer scope because `(cmd)` is rewritten to `{ cmd }` — no true process
-isolation without fork. `x=outer; (x=inner); echo $x` prints `inner` not `outer`.
+outer scope, because without fork() the body of `( )` runs in this shell.
+`x=outer; (x=inner); echo $x` prints `inner`, not `outer`.
 (2) Hard links (`ln src dst`) are not supported in Emscripten MEMFS.
 
 The runner supports a `knownFail` flag on individual tests: these display on
@@ -205,8 +205,11 @@ Embedding approach (same pattern as sed/awk):
 - Build flags: `BC_ENABLED=1 DC_ENABLED=1 BC_ENABLE_HISTORY=0 BC_ENABLE_EXTRA_MATH=0
   BC_ENABLE_NLS=0 BC_ENABLE_OSSFUZZ=0`
 
-Known limitation: `echo expr | bc` requires a pipe (fork). Use `bc <<< 'expr'` or
-a heredoc instead — both work because they use temp files rather than fork.
+`echo expr | bc`, `bc <<< 'expr'` and heredocs all work. Pipes into bc needed
+two fixes beyond the pipeline patch itself: `bc_embed_main()` clears `vm_data`
+so a second invocation does not inherit the first one's VM, and
+`embed/embed_stdin.h` clears the stdin EOF flag the previous invocation left
+behind.
 
 Source: `bc-7.0.3/` (downloaded from GitHub); `bc-src/` holds the patched copy.
 
