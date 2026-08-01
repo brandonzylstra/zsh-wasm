@@ -651,18 +651,81 @@ and the `build-awk/`, `build-sed/`, `build-bc/` object directories). Doing the s
 `ls`, `cat`, `grep`, `head`, `tail`, `cut`, `sort`, `uniq` and `wc` would delete most of the
 preamble and make the shims' fidelity question disappear.
 
-Worth evaluating BusyBox or toybox as a single bundle rather than nine separate ports —
-one dependency, one build step, and a far larger command surface for the same effort.
+### Which upstream? (evaluated 2026-08-01)
 
-Until then the shims stay, and the note in 1d about `wc`'s unpadded output being a
-deliberate project convention still applies.
+**BusyBox: no. The license decides it before the engineering does.**
+
+BusyBox is GPLv2-only (busybox.net/license.html; after 1.2.2 it may only be
+distributed under GPLv2, not later versions). zsh-wasm ships a single statically
+linked `zsh.wasm` under the permissive Zsh license, on npm and jsDelivr, for
+other sites to embed. Linking GPLv2 applets into that binary relicenses the
+published artifact and pushes the source-distribution obligation onto every
+downstream embedder — CodeCompared's CDN copies included. That is a product
+decision about what `npm install` gives people, not a paperwork detail, and it
+runs against the whole point of shipping a drop-in runtime.
+
+Worth recording what we would be giving up, because it is not nothing: BusyBox
+already solved the exact problem that cost the most effort here. Its NOFORK
+applets run in the caller's process, and the core saves and restores option
+parsing state, `xfunc_error_retval` and logmode automatically, while `xfunc_die`
+turns a fatal error into a return to the caller rather than an `exit()`
+(`docs/nofork_noexec.txt`). That is precisely the machinery hand-built for sed,
+awk and bc, generalized. On engineering alone BusyBox would be the obvious pick.
+The license is why it isn't.
+
+Secondary strikes, had the license been fine: Kconfig plus generated
+`applets.h`, and Linux-specific assumptions across applets we would have to
+configure out.
+
+**toybox: viable.** 0BSD, which is as permissive as it gets, and written from
+scratch precisely because BusyBox's license kept it out of Android. The cost is
+a single global `toys` struct shared by every command, needing a per-invocation
+reset — the same shape as the `memset(&vm_data, ...)` bc already needs, so a
+known pattern — plus its own `scripts/make.sh` build machinery generating flag
+macros.
+
+**sbase (suckless): the best structural fit, and the recommendation.**
+
+- MIT licensed.
+- Covers **27 of our 29 shims**: basename, cat, cp, cut, date, dirname, env,
+  find, grep, head, ln, ls, mktemp, mv, printenv, rm, seq, sleep, sort, tail,
+  tee, touch, tr, uniq, wc, which, xargs. Missing `base64` (it has
+  uudecode/uuencode) and `realpath` (`readlink -f` covers the use).
+- One `.c` per tool, each with its own `main()`, and `scripts/mkbox` already
+  renames `main` to `<tool>_main` and generates a dispatch table — the same
+  transformation `bin/build` performs by hand for sed/awk/bc.
+- **Fatal errors funnel through two functions**, `eprintf()` and `enprintf()` in
+  `libutil/eprintf.c`. Converting those to the longjmp pattern covers every tool
+  at once, instead of the per-file `exit()` hunt sed and bc each needed.
+- **No getopt globals.** Argument parsing is `arg.h`'s ARGBEGIN/ARGEND macros
+  over local `argc`/`argv`, with `argv0` the only global. Compare `sed_main()`,
+  which has to reset `optind` on every call.
+- Plain Makefile and `config.mk`, no Kconfig.
+
+Unknowns worth measuring rather than guessing: nobody appears to have built
+sbase under Emscripten, several tools are marked partial or non-UTF-8 in its
+README, and the wasm size cost is unmeasured.
+
+**Next step — a spike, not a port.** Take `wc`, `sort` and `cut`: the three
+whose shims produced wrong answers on 2026-07-31/08-01. Compile them from sbase
+as one zsh module using the sed/awk/bc pattern, then measure three things: the
+wasm growth, whether the existing tests for those commands still pass unchanged,
+and how much of `embed/embed_stdin.h` and the per-invocation reset dance is
+still needed once `eprintf` is the only exit path. Decide on the other 24 from
+those numbers.
+
+Until then the shims stay, and the note in 1d about `wc`'s unpadded output being
+a deliberate project convention still applies.
 
 **Checklist:**
-- [ ] Evaluate BusyBox/toybox as one bundle vs. individual ports
-- [ ] Port the first command (`grep` is the highest-value — see item 2) and
-      confirm the module pattern still holds now that stdin re-entrancy is
-      handled by `embed/embed_stdin.h`
+- [x] Evaluate BusyBox/toybox as one bundle vs. individual ports (see above:
+      BusyBox ruled out on license, sbase recommended)
+- [ ] Spike: build sbase `wc`, `sort`, `cut` as one zsh module; measure wasm
+      growth and test-suite delta
+- [ ] Decide on the remaining 24 from the spike's numbers
 - [ ] Delete each shim from `BUILTINS_PREAMBLE` as its compiled version lands
+- [ ] `base64` and `realpath` have no sbase equivalent — keep those two shims,
+      or map `realpath` onto `readlink -f`
 
 ---
 
