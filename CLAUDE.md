@@ -87,6 +87,12 @@ to every script automatically. It provides: `touch`, `cat`, `ls`, `cp`, `mv`,
 `dirname`, `rm`, `tee`, `seq`, `mktemp`, `sleep`, `xargs`, `which`, `realpath`,
 `ln`, `base64`, and `find`.
 
+Editing the preamble: it is a JavaScript template literal, so a backtick or an
+unescaped `${` inside it — including inside a zsh comment — ends the string and
+breaks `zsh-runtime.js` at parse time. Quote shell snippets in comments with
+'single quotes'. `bin/run-script --preamble` imports the module, so it fails
+loudly on this; a Playwright run just hangs with zero tests completed.
+
 `sed`, `awk`, and `bc` are compiled directly into the WASM binary (not shims)
 via `bin/build --with-sed --with-awk --with-bc`. The published npm package
 includes all three.
