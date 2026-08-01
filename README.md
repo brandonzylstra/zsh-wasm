@@ -422,9 +422,9 @@ most common ones:
 | `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
 | `wc`     | `-l` `-w` `-c`       | lines, words, bytes; default shows all three |
 | `head`   | `-n N`, `-N`, `-c N` | first N lines (default 10) or first N bytes |
-| `tail`   | `-n N`, `-N`, `-c N` | last N lines (default 10) or last N bytes |
+| `tail`   | `-n N`, `-N`, `-c N`, `-n +N` | last N lines (default 10) or last N bytes; `-n +N` starts at line N instead |
 | `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1 |
-| `sort`   | `-r` `-n` `-u` `-k N` | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)`; `-k N` sorts by Nth field |
+| `sort`   | `-r` `-n` `-u` `-k N` `-t DELIM` | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)`; `-k N` sorts by Nth field, split on whitespace or on `-t`'s delimiter |
 | `uniq`   | —                    | removes consecutive duplicate lines |
 | `cut`    | `-d DELIM` `-f RANGE` `-c N[-M]` | field ranges (`1-3`, `2,4`); `-c` for character positions |
 | `tr`      | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |

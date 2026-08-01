@@ -147,7 +147,7 @@ head() { setopt localoptions noerrexit;
   fi
 }
 tail() { setopt localoptions noerrexit;
-  local n=10 _bytes=0 f _stdin _content
+  local n=10 _bytes=0 _from_start=0 f _stdin _content _start
   local -a lines
   if   [[ \${1-} == -c ]]; then _bytes=1; n=$2; shift 2
   elif [[ \${1-} == -c* ]]; then _bytes=1; n=\${1#-c}; shift
@@ -155,19 +155,44 @@ tail() { setopt localoptions noerrexit;
   elif [[ \${1-} == -n ]]; then n=$2; shift 2
   elif [[ \${1-} == -n* ]]; then n=\${1#-n}; shift
   fi
+  # -n +N counts from the start of the input rather than the end: everything from
+  # line N on, which is how a header line gets dropped.
+  if [[ $n == +* ]]; then _from_start=1; n=\${n#+}; (( n < 1 )) && n=1; fi
+  # Given a total item count, print the 1-based index to start printing from, or
+  # 0 for "print nothing". The index has to be clamped: asking for more items
+  # than exist, as plain 'tail' on a short file does, would otherwise build an
+  # out-of-range slice, and zsh expands those to nothing at all.
+  _zw_tail_from() {
+    local _total=$1 _first
+    if (( _from_start )); then _first=$n
+    else                      _first=$(( _total - n + 1 )); (( _first < 1 )) && _first=1
+    fi
+    (( _total > 0 && _first <= _total )) && print -- $_first || print -- 0
+  }
   if (( _bytes )); then
     if (( $# )); then
-      for f; do _content=$(<$f); print -- \${_content[-$n,-1]}; done
+      for f; do
+        _content=$(<$f)
+        _start=$(_zw_tail_from \${#_content})
+        (( _start )) && print -- \${_content[$_start,-1]}
+      done
     else
-      IFS= read -r -d '' _stdin || true; print -- \${_stdin[-$n,-1]}
+      IFS= read -r -d '' _stdin || true
+      _start=$(_zw_tail_from \${#_stdin})
+      (( _start )) && print -- \${_stdin[$_start,-1]}
     fi
   else
     if (( $# )); then
-      for f; do _zw_split_lines lines "$(<$f)"; (( \${#lines} )) && print -l -- \${lines[-$n,-1]}; done
+      for f; do
+        _zw_split_lines lines "$(<$f)"
+        _start=$(_zw_tail_from \${#lines})
+        (( _start )) && print -l -- \${lines[$_start,-1]}
+      done
     else
       IFS= read -r -d '' _stdin || true
       _zw_split_lines lines "$_stdin"
-      (( \${#lines} )) && print -l -- \${lines[-$n,-1]}
+      _start=$(_zw_tail_from \${#lines})
+      (( _start )) && print -l -- \${lines[$_start,-1]}
     fi
   fi
 }
@@ -416,18 +441,29 @@ date() { setopt localoptions noerrexit;
   print -- \${_out//__TZSUB__/$_tzstr}
 }
 sort() { setopt localoptions noerrexit;
-  local rev=0 num=0 uniq_flag=0 key=0
+  local rev=0 num=0 uniq_flag=0 key=0 delim=''
   local -a args
-  local skip_next=0
+  local awaiting=''
   for a; do
-    if (( skip_next )); then key=$a; skip_next=0; continue; fi
+    if [[ -n $awaiting ]]; then
+      case $awaiting in
+        k) key=$a ;;
+        t) delim=$a ;;
+      esac
+      awaiting=''
+      continue
+    fi
     if [[ $a == -* ]]; then
+      # -k and -t take a value, so they are matched before the combinable
+      # letters: the delimiter of 'sort -tn' is not a request for numeric sort.
+      if   [[ $a == -k  ]]; then awaiting=k;        continue
+      elif [[ $a == -k* ]]; then key=\${a#-k};       continue
+      elif [[ $a == -t  ]]; then awaiting=t;        continue
+      elif [[ $a == -t* ]]; then delim=\${a#-t};     continue
+      fi
       [[ $a == *r* ]] && rev=1
       [[ $a == *n* ]] && num=1
       [[ $a == *u* ]] && uniq_flag=1
-      if [[ $a == -k ]]; then skip_next=1
-      elif [[ $a == -k* ]]; then key=\${a#-k}
-      fi
     else
       args+=($a)
     fi
@@ -444,11 +480,13 @@ sort() { setopt localoptions noerrexit;
     _zw_split_lines lines "$_stdin"
   fi
   if (( key > 0 )); then
-    # Extract field $key (whitespace-delimited) for sorting, then sort
+    # Extract field $key for sorting, then sort
     local -a keyed words
     local line
     for line in "\${(@)lines}"; do
-      words=(\${(z)line})
+      if [[ -n $delim ]]; then words=("\${(@ps:$delim:)line}")
+      else                     words=(\${(z)line})
+      fi
       keyed+=("\${words[$key]:-}	$line")
     done
     if   (( num && rev )); then keyed=("\${(@On)keyed}")

@@ -170,6 +170,32 @@ from `IFS= read -r -d '' content` instead of `$(<$f)`.
 
 ---
 
+1g. `tail -n +N` and `sort -t` (done)
+--------------------------------------
+
+Both found by writing one ordinary CSV script against the new pipeline support,
+which is a fair comment on how much the shims had been exercised by realistic
+input rather than by targeted tests.
+
+- `tail -n +N` (start at line N — how a header line gets dropped) was read as
+  "last N lines", so `tail -n +2 file | wc -l` on a 6-line CSV answered 2.
+- `tail` with a count larger than the input printed *nothing*: the negative
+  slice `\${lines[-10,-1]}` is out of range on a 4-line file, and zsh expands
+  out-of-range slices to nothing. Plain `tail file` on any file under 10 lines
+  was therefore empty. The start index is now clamped.
+- `sort -t DELIM` was not supported at all, so `sort -t, -k3` fell back to
+  whitespace splitting and sorted by a field that did not exist — a wrong
+  answer rather than an error. `-t` and `-k` are now parsed before the
+  combinable flag letters, so the delimiter of `sort -tn` is not mistaken for a
+  request for numeric sort.
+
+Tests: `tail-from-line`, `tail-from-line-stdin`, `tail-from-line-past-end`,
+`tail-default-short-file`, `tail-count-over-length`, `tail-bytes-over-length`,
+`head-count-over-length`, `sort-field-separator`,
+`sort-field-separator-detached`, `sort-separator-not-a-flag`.
+
+---
+
 1f. Empty input produced a line that was not there (done)
 ----------------------------------------------------------
 

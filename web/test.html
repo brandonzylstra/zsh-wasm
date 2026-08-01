@@ -1014,6 +1014,41 @@ const tests = [
     { name: 'errexit-pipeline',
       script: "setopt errexit\nprint -l x y | sort | grep x | wc -l\necho survived",
       expected: '1\nsurvived' },
+    // sort -t: a field separator other than whitespace. Without it, `-k3` on CSV
+    // silently sorted by the wrong thing rather than failing.
+    { name: 'sort-field-separator',
+      script: "printf 'west,alice,120\\neast,bob,340\\nwest,carol,90\\neast,dave,505\\n' > /tmp/sf.csv\nsort -t, -k3 -rn /tmp/sf.csv | head -1",
+      expected: 'east,dave,505' },
+    { name: 'sort-field-separator-detached',
+      script: "printf 'b:2\\na:3\\nc:1\\n' | sort -t : -k2 -n",
+      expected: 'c:1\nb:2\na:3' },
+    // -t's delimiter must not be read as a combinable flag letter
+    { name: 'sort-separator-not-a-flag',
+      script: "printf '1r9\\n2r3\\n' | sort -tr -k2",
+      expected: '2r3\n1r9' },
+    // tail: -n +N counts from the start (drop a header), and a count larger than
+    // the input is not an error — plain `tail` on a short file must print it all.
+    { name: 'tail-from-line',
+      script: "printf 'h\\na\\nb\\nc\\n' > /tmp/tf.txt\ntail -n +2 /tmp/tf.txt",
+      expected: 'a\nb\nc' },
+    { name: 'tail-from-line-stdin',
+      script: "printf 'header\\nrow1\\nrow2\\n' | tail -n +2",
+      expected: 'row1\nrow2' },
+    { name: 'tail-from-line-past-end',
+      script: "printf 'a\\nb\\n' | tail -n +9 | wc -l",
+      expected: '0' },
+    { name: 'tail-default-short-file',
+      script: "printf 'a\\nb\\nc\\n' > /tmp/ts.txt\ntail /tmp/ts.txt",
+      expected: 'a\nb\nc' },
+    { name: 'tail-count-over-length',
+      script: "printf 'x\\ny\\n' | tail -5",
+      expected: 'x\ny' },
+    { name: 'tail-bytes-over-length',
+      script: "printf 'abc' | tail -c 100",
+      expected: 'abc' },
+    { name: 'head-count-over-length',
+      script: "printf 'a\\nb\\n' | head -50",
+      expected: 'a\nb' },
     // Empty input must produce empty output. Splitting '' with (@f) yields one
     // empty element, so every line-oriented shim used to emit a stray newline —
     // and `wc -l` counted that phantom line as 1.
