@@ -383,7 +383,11 @@ const tests = [
     // wc multiple files
     { name: 'wc-multifile',
       script: "printf 'a\\nb\\n' > /tmp/wm1.txt\nprintf 'x\\ny\\nz\\n' > /tmp/wm2.txt\nwc -l /tmp/wm1.txt /tmp/wm2.txt",
-      expected: '2 /tmp/wm1.txt\n3 /tmp/wm2.txt' },
+      expected: '2 /tmp/wm1.txt\n3 /tmp/wm2.txt\n5 total' },
+    // one file gets no total line, matching wc
+    { name: 'wc-single-file-no-total',
+      script: "printf 'a\\nb\\n' > /tmp/ws1.txt\nwc -l /tmp/ws1.txt\nprintf 'q\\n' | wc -l",
+      expected: '2 /tmp/ws1.txt\n1' },
     // sed: basic substitution (uses file arg; C-level stdin bypasses zsh pipe sim)
     { name: 'sed-sub',
       script: "printf 'hello world\\n' > /tmp/ss.txt\nsed 's/world/zsh/' /tmp/ss.txt",

@@ -84,6 +84,7 @@ wc() { setopt localoptions noerrexit;
   done
   (( default )) && do_l=1 do_w=1 do_c=1
   local -a sources
+  local -i total_lines=0 total_words=0 total_bytes=0
   (( \${#args} )) && sources=("\${(@)args}") || sources=('-')
   for f in "\${(@)sources}"; do
     if [[ $f == - ]]; then
@@ -99,6 +100,7 @@ wc() { setopt localoptions noerrexit;
     if (( do_l )); then
       _zw_split_lines _wl "$content"
       out+=" \${#_wl}"
+      (( total_lines += \${#_wl} ))
     fi
     if (( do_w )); then
       nw=0; _iw=0
@@ -109,17 +111,28 @@ wc() { setopt localoptions noerrexit;
         fi
       done
       out+=" $nw"
+      (( total_words += nw ))
     fi
     if (( do_c )); then
       if [[ $f == - ]]; then
         out+=" \${#raw}"
+        (( total_bytes += \${#raw} ))
       else
         zstat -H _wst "$f"
         out+=" \${_wst[size]}"
+        (( total_bytes += _wst[size] ))
       fi
     fi
     print -- "\${out# }\${label}"
   done
+  # More than one file gets a total line, the same as wc itself.
+  if (( \${#sources} > 1 )); then
+    out=''
+    (( do_l )) && out+=" $total_lines"
+    (( do_w )) && out+=" $total_words"
+    (( do_c )) && out+=" $total_bytes"
+    print -- "\${out# } total"
+  fi
 }
 head() { setopt localoptions noerrexit;
   local n=10 _bytes=0 f _stdin _content
