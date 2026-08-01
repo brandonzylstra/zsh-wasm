@@ -47,6 +47,16 @@ export const ZSH_FS = (globalThis.ZshWasmConfig?.fs ?? 'memfs').toLowerCase();
 export const IDBFS_MOUNT = '/home/user';
 
 export const BUILTINS_PREAMBLE = `\
+# Split TEXT into lines in the array named by ARRAY.
+# Two ways a plain (@f) split produces a line that was never there: splitting the
+# empty string yields one empty element, and a trailing newline yields an empty
+# last element. Either one shows up as a stray blank line of output, which is
+# how 'printf "" | sort' came to print a newline.
+_zw_split_lines() { setopt localoptions noerrexit;
+  local -a _zw_parts
+  [[ -n $2 ]] && _zw_parts=("\${(@f)\${2%$'\\n'}}")
+  set -A $1 "\${(@)_zw_parts}"
+}
 touch() { setopt localoptions noerrexit; local f; for f; do : >> "$f"; done }
 cat() { setopt localoptions noerrexit;
   local f
@@ -59,7 +69,7 @@ cat() { setopt localoptions noerrexit;
   fi
 }
 wc() { setopt localoptions noerrexit;
-  local do_l=0 do_w=0 do_c=0 default=1 f content label out nw _iw j ch
+  local do_l=0 do_w=0 do_c=0 default=1 f content raw label out nw _iw j ch
   local -a args _wl
   local -A _wst
   for a; do
@@ -77,8 +87,9 @@ wc() { setopt localoptions noerrexit;
   (( \${#args} )) && sources=("\${(@)args}") || sources=('-')
   for f in "\${(@)sources}"; do
     if [[ $f == - ]]; then
-      IFS= read -r -d '' content || true
-      content=\${content%$'\n'}
+      IFS= read -r -d '' raw || true
+      # Lines and words are counted without the trailing newline; bytes include it.
+      content=\${raw%$'\n'}
       label=''
     else
       content=$(<$f)
@@ -86,7 +97,7 @@ wc() { setopt localoptions noerrexit;
     fi
     out=''
     if (( do_l )); then
-      _wl=("\${(@f)content}")
+      _zw_split_lines _wl "$content"
       out+=" \${#_wl}"
     fi
     if (( do_w )); then
@@ -101,7 +112,7 @@ wc() { setopt localoptions noerrexit;
     fi
     if (( do_c )); then
       if [[ $f == - ]]; then
-        out+=" \${#content}"
+        out+=" \${#raw}"
       else
         zstat -H _wst "$f"
         out+=" \${_wst[size]}"
@@ -127,12 +138,11 @@ head() { setopt localoptions noerrexit;
     fi
   else
     if (( $# )); then
-      for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[1,$n]}; done
+      for f; do _zw_split_lines lines "$(<$f)"; (( \${#lines} )) && print -l -- \${lines[1,$n]}; done
     else
       IFS= read -r -d '' _stdin || true
-      _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
-      lines=("\${(@f)_stdin}")
-      print -l -- \${lines[1,$n]}
+      _zw_split_lines lines "$_stdin"
+      (( \${#lines} )) && print -l -- \${lines[1,$n]}
     fi
   fi
 }
@@ -153,12 +163,11 @@ tail() { setopt localoptions noerrexit;
     fi
   else
     if (( $# )); then
-      for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[-$n,-1]}; done
+      for f; do _zw_split_lines lines "$(<$f)"; (( \${#lines} )) && print -l -- \${lines[-$n,-1]}; done
     else
       IFS= read -r -d '' _stdin || true
-      _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
-      lines=("\${(@f)_stdin}")
-      print -l -- \${lines[-$n,-1]}
+      _zw_split_lines lines "$_stdin"
+      (( \${#lines} )) && print -l -- \${lines[-$n,-1]}
     fi
   fi
 }
@@ -217,10 +226,9 @@ grep() { setopt localoptions noerrexit;
   for _src in "\${(@)_srcs}"; do
     if [[ $_src == - ]]; then
       IFS= read -r -d '' _stdin || true
-      _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
-      lines=("\${(@f)_stdin}")
+      _zw_split_lines lines "$_stdin"
     else
-      lines=("\${(@f)$(<$_src)}")
+      _zw_split_lines lines "$(<$_src)"
     fi
     _cnt=0; _num=0; _file_hit=0
     if (( _show_fname )); then _pfx="\${_src}:"; else _pfx=""; fi
@@ -429,11 +437,11 @@ sort() { setopt localoptions noerrexit;
   key=\${key%%[^0-9]*}
   local -a lines
   local f _stdin
-  for f in $args; do lines+=("\${(@f)$(<$f)}"); done
+  local -a _zw_file_lines
+  for f in $args; do _zw_split_lines _zw_file_lines "$(<$f)"; lines+=("\${(@)_zw_file_lines}"); done
   if (( !\${#args} )); then
     IFS= read -r -d '' _stdin || true
-    _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
-    lines=("\${(@f)_stdin}")
+    _zw_split_lines lines "$_stdin"
   fi
   if (( key > 0 )); then
     # Extract field $key (whitespace-delimited) for sorting, then sort
@@ -484,11 +492,10 @@ uniq() { setopt localoptions noerrexit;
   local -a lines
   local prev line first=1 _stdin _run=0
   if (( \${#args} )); then
-    lines=("\${(@f)$(<$args[1])}")
+    _zw_split_lines lines "$(<$args[1])"
   else
     IFS= read -r -d '' _stdin || true
-    _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
-    lines=("\${(@f)_stdin}")
+    _zw_split_lines lines "$_stdin"
   fi
   _zw_uniq_emit() {
     (( _run == 0 )) && return
@@ -532,10 +539,9 @@ cut() { setopt localoptions noerrexit;
   for f in "\${(@)sources}"; do
     if [[ $f == - ]]; then
       IFS= read -r -d '' _cutin || true
-      _cutin=\${_cutin%$'\\n'}
-      lines=("\${(@f)_cutin}")
+      _zw_split_lines lines "$_cutin"
     else
-      lines=("\${(@f)$(<$f)}")
+      _zw_split_lines lines "$(<$f)"
     fi
     for line in "\${(@)lines}"; do
       if [[ -n $chars ]]; then

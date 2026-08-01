@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --no-warnings
 // Runs a zsh script against a built zsh.js/zsh.wasm pair from the command line.
 // Development aid: lets you exercise the wasm build without a browser or a
 // Playwright run.  The browser runtime (web/zsh-runtime.js) is a separate path;
@@ -36,24 +36,6 @@ if (scriptSource == null) {
     process.exit(2);
 }
 
-if (withPreamble) {
-    const runtimeSource = fs.readFileSync(path.join(root, 'web/zsh-runtime.js'), 'utf8');
-    const match = runtimeSource.match(/const BUILTINS_PREAMBLE = `([\s\S]*?)\n`;\n/);
-    if (!match) {
-        console.error('could not extract BUILTINS_PREAMBLE from web/zsh-runtime.js');
-        process.exit(2);
-    }
-    // The preamble is a JS template literal; un-escape the sequences that
-    // matter inside it (\` and \\ and ${).
-    const preamble = match[1]
-        .replace(/\\`/g, '`')
-        .replace(/\\\$/g, '$')
-        .replace(/\\\\/g, '\\');
-    scriptSource = '_ZW_LOCAL_TZ_SECS=0\n' + preamble + '\n' + scriptSource;
-}
-
-const createZshModule = require(modulePath);
-
 const out = [];
 const err = [];
 
@@ -62,6 +44,21 @@ let stdinPosition = 0;
 if (stdinText != null) {
     stdinBytes = Buffer.from(stdinText.endsWith('\n') ? stdinText : stdinText + '\n');
 }
+
+main();
+
+async function main() {
+
+if (withPreamble) {
+    // Import the real module rather than scraping the constant out of the file:
+    // a copy of the extraction logic here would keep working after a change that
+    // breaks the browser, which is exactly the bug it would be hiding.
+    const runtimeUrl = new URL('file://' + path.join(root, 'web/zsh-runtime.js'));
+    const { BUILTINS_PREAMBLE } = await import(runtimeUrl);
+    scriptSource = '_ZW_LOCAL_TZ_SECS=0\n' + BUILTINS_PREAMBLE + '\n' + scriptSource;
+}
+
+const createZshModule = require(modulePath);
 
 createZshModule({
     noInitialRun: true,
@@ -91,3 +88,5 @@ createZshModule({
     if (err.length) process.stderr.write('[stderr] ' + err.join('\n[stderr] ') + '\n');
     process.stdout.write(`[exit ${exitCode}]\n`);
 });
+
+}

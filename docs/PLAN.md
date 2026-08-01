@@ -170,6 +170,31 @@ from `IFS= read -r -d '' content` instead of `$(<$f)`.
 
 ---
 
+1f. Empty input produced a line that was not there (done)
+----------------------------------------------------------
+
+Same family as 1d, and the one it missed. `${(@f)text}` splits the empty string
+into one empty element, so with empty input `sort`, `uniq`, `head`, `tail`,
+`cut` and `grep` each printed a stray newline, and `wc -l` counted that phantom
+line: `printf '' | wc -l` said 1, as did `wc -l` on an empty file.
+
+Pipelines make empty input ordinary — `grep pattern file | sort | uniq` on no
+matches — so this went from obscure to routine.
+
+- `_zw_split_lines ARRAY TEXT` is now the single place that turns text into an
+  array of lines. It handles both phantom cases (empty string, trailing
+  newline), and all 11 split sites call it.
+- `head`/`tail` additionally guard their output: `print -l --` with an empty
+  list still prints one empty line.
+- `wc -c` on stdin was off by one in the other direction: it counted the content
+  *after* the trailing newline was stripped for line counting. Bytes now come
+  from the raw input, lines and words from the stripped copy.
+
+Tests: `empty-input-wc`, `empty-input-no-blank-line`, `empty-line-preserved`,
+`wc-stdin-byte-count`.
+
+---
+
 1e. `setopt errexit` compatibility in the shims (done)
 ------------------------------------------------------
 

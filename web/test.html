@@ -1014,6 +1014,23 @@ const tests = [
     { name: 'errexit-pipeline',
       script: "setopt errexit\nprint -l x y | sort | grep x | wc -l\necho survived",
       expected: '1\nsurvived' },
+    // Empty input must produce empty output. Splitting '' with (@f) yields one
+    // empty element, so every line-oriented shim used to emit a stray newline —
+    // and `wc -l` counted that phantom line as 1.
+    { name: 'empty-input-wc',
+      script: "printf '' | wc -l\n: > /tmp/mt.txt\nwc -l /tmp/mt.txt\ngrep nomatch <<< hello | wc -l",
+      expected: '0\n0 /tmp/mt.txt\n0' },
+    { name: 'empty-input-no-blank-line',
+      script: "byte_count() { print \"$1=$(zstat +size $2)\" }\nprintf '' | sort > /tmp/m1; byte_count sort /tmp/m1\nprintf '' | uniq > /tmp/m2; byte_count uniq /tmp/m2\nprintf '' | head -3 > /tmp/m3; byte_count head /tmp/m3\nprintf '' | tail -3 > /tmp/m4; byte_count tail /tmp/m4\nprintf '' | cut -c1 > /tmp/m5; byte_count cut /tmp/m5\nprintf '' | grep -v z > /tmp/m6; byte_count grep /tmp/m6",
+      expected: 'sort=0\nuniq=0\nhead=0\ntail=0\ncut=0\ngrep=0' },
+    // ...but a blank line that really is in the input must survive
+    { name: 'empty-line-preserved',
+      script: "printf 'x\\n\\ny\\n' | cat | wc -l\nprintf 'x\\n\\ny\\n' | sort | wc -l",
+      expected: '3\n3' },
+    // wc counts bytes including the trailing newline, lines without it
+    { name: 'wc-stdin-byte-count',
+      script: "printf 'a b\\n' | wc\nprintf 'x' | wc -c\nwc -c <<< abc",
+      expected: '1 2 4\n1\n4' },
     // a successful shim reports success — `env` used to return the status of the
     // last [[ ]] test in its loop
     { name: 'shim-exit-status',
