@@ -444,6 +444,55 @@ processes, and `fork()` is not available.
   sending to zsh
 - Fragile (parsing shell is hard); only practical for simple linear pipelines
 
+### Option E: Patch `execpline2` to run pipeline stages in-process ⭐ THE REAL FIX
+
+**This is the option that should have been on this list from the start, and it is what
+Option C is a workaround for.** `bin/setup` already does exactly this for command
+substitution: it patches `Src/exec.c` so `zfork()` returns −1 silently on `ENOSYS` under
+`#ifdef __EMSCRIPTEN__`, then runs the substituted command **in the current shell**,
+`dup2`-ing the pipe onto stdout and reading it back. That is why `$( )` works in this build
+while pipes do not.
+
+Only **2 of the 9 `zfork` call sites** in `Src/exec.c` are patched — `zfork` itself
+(~line 333) and command substitution (~line 4672). The pipeline site is `execpline2`
+(~line 2760) and is untouched.
+
+Doing the same there would let the wasm build run `a | b | c` natively and **delete
+`simulatePipes()` entirely**, along with its whole class of bugs:
+
+- It rewrites source it should not touch unless a real ` | ` is present — an anonymous
+  function `() { … }` comes out as `{  } { … }`, a parse error. Callers must guard on
+  `hasPipelineOp()` first, which is easy to forget (CodeCompared did, and shipped it).
+- Temp-file chaining is not pipeline semantics. It happens to match zsh, which runs the
+  last stage in the parent shell anyway — but it would NOT match bash, and it silently
+  changes behavior for anything relying on a subshell per stage.
+- Parsing shell in JavaScript to find the pipes is inherently approximate; the current
+  implementation already carries special cases for case-pattern alternation and glob
+  qualifiers.
+
+Trade-offs to accept up front, the same ones the `$( )` patch documents in its own comment:
+variable assignments in a stage leak to the parent, and output larger than the pipe buffer
+may deadlock. Both were judged acceptable for the script workloads this targets.
+
+### Replace the coreutils shims with compiled binaries ⭐ THE OTHER REAL FIX
+
+`BUILTINS_PREAMBLE` in `web/zsh-runtime.js` is ~27 KB of zsh functions reimplementing 56
+coreutils commands. It is a workaround, and it behaves like one — four real bugs were found
+in it on 2026-07-31 (see 1d above), all invisible to a test suite that only exercised file
+arguments.
+
+**The pattern to follow already exists in this repo:** `awk`, `sed` and `bc` are compiled in
+as real loadable zsh modules (`zsh/awk`, `zsh/sed`, `zsh/bc` — see `bin/build --with-awk`
+and the `build-awk/`, `build-sed/`, `build-bc/` object directories). Doing the same for
+`ls`, `cat`, `grep`, `head`, `tail`, `cut`, `sort`, `uniq` and `wc` would delete most of the
+preamble and make the shims' fidelity question disappear.
+
+Worth evaluating BusyBox or toybox as a single bundle rather than nine separate ports —
+one dependency, one build step, and a far larger command surface for the same effort.
+
+Until then the shims stay, and the note in 1d about `wc`'s unpadded output being a
+deliberate project convention still applies.
+
 ### Option D: Accept the limitation; document workarounds
 
 The most pragmatic short-term answer. Provide a guide in the README:
