@@ -47,18 +47,18 @@ export const ZSH_FS = (globalThis.ZshWasmConfig?.fs ?? 'memfs').toLowerCase();
 export const IDBFS_MOUNT = '/home/user';
 
 export const BUILTINS_PREAMBLE = `\
-touch() { local f; for f; do : >> "$f"; done }
-cat() {
+touch() { setopt localoptions noerrexit; local f; for f; do : >> "$f"; done }
+cat() { setopt localoptions noerrexit;
   local f
   if (( $# == 0 )); then
     local _stdin
-    IFS= read -r -d '' _stdin
+    IFS= read -r -d '' _stdin || true
     print -rn -- "$_stdin"
   else
     for f; do print -r -- "$(<$f)"; done
   fi
 }
-wc() {
+wc() { setopt localoptions noerrexit;
   local do_l=0 do_w=0 do_c=0 default=1 f content label out nw _iw j ch
   local -a args _wl
   local -A _wst
@@ -77,7 +77,7 @@ wc() {
   (( \${#args} )) && sources=("\${(@)args}") || sources=('-')
   for f in "\${(@)sources}"; do
     if [[ $f == - ]]; then
-      IFS= read -r -d '' content
+      IFS= read -r -d '' content || true
       content=\${content%$'\n'}
       label=''
     else
@@ -110,7 +110,7 @@ wc() {
     print -- "\${out# }\${label}"
   done
 }
-head() {
+head() { setopt localoptions noerrexit;
   local n=10 _bytes=0 f _stdin _content
   local -a lines
   if   [[ \${1-} == -c ]]; then _bytes=1; n=$2; shift 2
@@ -123,20 +123,20 @@ head() {
     if (( $# )); then
       for f; do _content=$(<$f); print -- \${_content[1,$n]}; done
     else
-      IFS= read -r -d '' _stdin; print -- \${_stdin[1,$n]}
+      IFS= read -r -d '' _stdin || true; print -- \${_stdin[1,$n]}
     fi
   else
     if (( $# )); then
       for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[1,$n]}; done
     else
-      IFS= read -r -d '' _stdin
+      IFS= read -r -d '' _stdin || true
       _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
       lines=("\${(@f)_stdin}")
       print -l -- \${lines[1,$n]}
     fi
   fi
 }
-tail() {
+tail() { setopt localoptions noerrexit;
   local n=10 _bytes=0 f _stdin _content
   local -a lines
   if   [[ \${1-} == -c ]]; then _bytes=1; n=$2; shift 2
@@ -149,20 +149,20 @@ tail() {
     if (( $# )); then
       for f; do _content=$(<$f); print -- \${_content[-$n,-1]}; done
     else
-      IFS= read -r -d '' _stdin; print -- \${_stdin[-$n,-1]}
+      IFS= read -r -d '' _stdin || true; print -- \${_stdin[-$n,-1]}
     fi
   else
     if (( $# )); then
       for f; do lines=("\${(@f)$(<$f)}"); print -l -- \${lines[-$n,-1]}; done
     else
-      IFS= read -r -d '' _stdin
+      IFS= read -r -d '' _stdin || true
       _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
       lines=("\${(@f)_stdin}")
       print -l -- \${lines[-$n,-1]}
     fi
   fi
 }
-grep() {
+grep() { setopt localoptions noerrexit;
   local _gi=0 _gv=0 _gn=0 _gc=0 _ga=0 _gb=0 _gr=0 _gl=0 _go=0 _gm=0 _gH=0 _gq=0 _gw=0 _any_hit=0
   local pat _src line _cnt _num _hit _stdin _pfx _rest _rest_lc _match_out _file_hit _show_fname
   local _i _from _to _last_end
@@ -216,7 +216,7 @@ grep() {
   (( _gH == -1 )) && _show_fname=0
   for _src in "\${(@)_srcs}"; do
     if [[ $_src == - ]]; then
-      IFS= read -r -d '' _stdin
+      IFS= read -r -d '' _stdin || true
       _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
       lines=("\${(@f)_stdin}")
     else
@@ -305,7 +305,7 @@ grep() {
   done
   return $(( !_any_hit ))
 }
-_ls_modestr() {
+_ls_modestr() { setopt localoptions noerrexit;
   local m=$1 t p=''
   if   (( (m & 0170000) == 0040000 )); then t=d
   elif (( (m & 0170000) == 0120000 )); then t=l
@@ -321,7 +321,7 @@ _ls_modestr() {
   for (( i=1; i<=9; i++ )); do (( m & ms[i] )) && p+=$cs[i] || p+='-'; done
   _MODESTR="$t$p"
 }
-ls() {
+ls() { setopt localoptions noerrexit;
   local show_all=0 long=0 recursive=0
   local -a args
   for a; do
@@ -355,9 +355,9 @@ ls() {
     fi
   done
 }
-cp() { print -r -- "$(<$1)" > "$2" }
-mv() { cp "$1" "$2" && zf_rm "$1" }
-date() {
+cp() { setopt localoptions noerrexit; print -r -- "$(<$1)" > "$2" }
+mv() { setopt localoptions noerrexit; cp "$1" "$2" && zf_rm "$1" }
+date() { setopt localoptions noerrexit;
   zmodload zsh/datetime 2>/dev/null
   local fmt='%a %b %e %H:%M:%S %z %Y'
   [[ \${1-} == +* ]] && fmt=\${1#+}
@@ -407,7 +407,7 @@ date() {
   _out=$(strftime "$_pfmt" $_adj)
   print -- \${_out//__TZSUB__/$_tzstr}
 }
-sort() {
+sort() { setopt localoptions noerrexit;
   local rev=0 num=0 uniq_flag=0 key=0
   local -a args
   local skip_next=0
@@ -431,7 +431,7 @@ sort() {
   local f _stdin
   for f in $args; do lines+=("\${(@f)$(<$f)}"); done
   if (( !\${#args} )); then
-    IFS= read -r -d '' _stdin
+    IFS= read -r -d '' _stdin || true
     _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
     lines=("\${(@f)_stdin}")
   fi
@@ -466,7 +466,7 @@ sort() {
   fi
   (( \${#lines} )) && print -l -- "\${(@)lines}"
 }
-uniq() {
+uniq() { setopt localoptions noerrexit;
   # -c prefixes each run with its count, -d shows only repeated runs, -u only
   # non-repeated ones. Previously EVERY flag was discarded, so 'uniq -c' silently
   # behaved as a plain uniq — the counts just vanished.
@@ -486,7 +486,7 @@ uniq() {
   if (( \${#args} )); then
     lines=("\${(@f)$(<$args[1])}")
   else
-    IFS= read -r -d '' _stdin
+    IFS= read -r -d '' _stdin || true
     _stdin=\${_stdin%$'\\n'}   # drop the trailing newline so (@f) gains no phantom empty element
     lines=("\${(@f)_stdin}")
   fi
@@ -507,7 +507,7 @@ uniq() {
   _zw_uniq_emit
   unfunction _zw_uniq_emit
 }
-cut() {
+cut() { setopt localoptions noerrexit;
   local delim=$'\\t' fields='' chars=''
   local -a args
   while (( $# )); do
@@ -531,7 +531,7 @@ cut() {
   (( \${#args} )) && sources=("\${(@)args}") || sources=('-')
   for f in "\${(@)sources}"; do
     if [[ $f == - ]]; then
-      IFS= read -r -d '' _cutin
+      IFS= read -r -d '' _cutin || true
       _cutin=\${_cutin%$'\\n'}
       lines=("\${(@f)_cutin}")
     else
@@ -577,7 +577,7 @@ cut() {
     done
   done
 }
-tr() {
+tr() { setopt localoptions noerrexit;
   local delete=0
   local -a args
   for a; do
@@ -586,7 +586,7 @@ tr() {
     args+=($a)
   done
   local content
-  IFS= read -r -d '' content
+  IFS= read -r -d '' content || true
   if (( delete )); then
     local c
     for (( i=1; i<=\${#args[1]}; i++ )); do
@@ -606,7 +606,7 @@ tr() {
   fi
   print -rn -- "$content"
 }
-basename() {
+basename() { setopt localoptions noerrexit;
   local p=$1 s=\${2:-}
   while [[ \${#p} -gt 1 && $p == */ ]]; do p=\${p%/}; done
   p=\${p##*/}
@@ -614,7 +614,7 @@ basename() {
   [[ -n $s && $p == *$s ]] && p=\${p%$s}
   print -- "$p"
 }
-dirname() {
+dirname() { setopt localoptions noerrexit;
   local p=$1
   while [[ \${#p} -gt 1 && $p == */ ]]; do p=\${p%/}; done
   [[ $p == / ]] && { print /; return }
@@ -622,7 +622,7 @@ dirname() {
   p=\${p%/*}
   print -- "\${p:-/}"
 }
-tee() {
+tee() { setopt localoptions noerrexit;
   local append=0
   local -a files
   for a; do
@@ -631,7 +631,7 @@ tee() {
     files+=($a)
   done
   local content
-  IFS= read -r -d '' content
+  IFS= read -r -d '' content || true
   local f
   for f in $files; do
     if (( append )); then print -rn -- "$content" >> $f
@@ -640,7 +640,7 @@ tee() {
   done
   print -rn -- "$content"
 }
-seq() {
+seq() { setopt localoptions noerrexit;
   local first=1 step=1 last
   case $# in
     1) last=$1 ;;
@@ -655,7 +655,7 @@ seq() {
     for (( i=first; i>=last; i+=step )); do print -- $i; done
   fi
 }
-mktemp() {
+mktemp() { setopt localoptions noerrexit;
   local makedirs=0
   local template='/tmp/tmp.XXXXXX'
   for a; do
@@ -674,8 +674,8 @@ mktemp() {
   fi
   print -- "$result"
 }
-sleep() { printf '%s' "\${1:-0}" > /dev/wasm_sleep }
-xargs() {
+sleep() { setopt localoptions noerrexit; printf '%s' "\${1:-0}" > /dev/wasm_sleep }
+xargs() { setopt localoptions noerrexit;
   local _replace='' _max_args=0 _item _arg _line _stdin _cnt=0
   local -a _cmd _items _batch _expanded _flat
   while [[ \${1-} == -* ]]; do
@@ -691,7 +691,7 @@ xargs() {
   done
   _cmd=("\$@")
   (( \${#_cmd} == 0 )) && _cmd=(echo)
-  IFS= read -r -d '' _stdin
+  IFS= read -r -d '' _stdin || true
   if [[ -n \$_replace ]]; then
     _items=(\${(f)_stdin})
     _items=("\${(@)_items:#}")
@@ -719,7 +719,7 @@ xargs() {
     (( \${#_items} )) && "\${_cmd[@]}" "\${_items[@]}"
   fi
 }
-find() {
+find() { setopt localoptions noerrexit;
   local _dir='.' _type='' _name='' _maxdepth='' _newer=''
   local _dir_set=0 _f _d _rel _depth _nm _newer_mtime=0
   local -a _extra_dirs _items _alldirs _parts
@@ -779,7 +779,7 @@ find() {
     done
   done
 }
-rm() {
+rm() { setopt localoptions noerrexit;
   local force=0 recursive=0
   local -a targets
   for a; do
@@ -805,7 +805,7 @@ rm() {
     fi
   done
 }
-env() {
+env() { setopt localoptions noerrexit;
   local -a _vars _cmd _unset
   local _a _k _v
   while (( $# )); do
@@ -826,7 +826,7 @@ env() {
     for _k in "\${(@k)parameters}"; do
       [[ \${parameters[$_k]} == *export* ]] && print -- "$_k=\${(P)_k}"
     done
-    return
+    return 0   # not the status of the last [[ ]] test
   fi
   for _a in "\${(@)_unset}"; do unset "$_a"; done
   for _a in "\${(@)_vars}"; do
@@ -835,7 +835,7 @@ env() {
   done
   "\${_cmd[@]}"
 }
-printenv() {
+printenv() { setopt localoptions noerrexit;
   local _v
   if (( $# )); then
     for _v; do print -- "\${(P)_v}"; done
@@ -845,7 +845,7 @@ printenv() {
     done
   fi
 }
-which() {
+which() { setopt localoptions noerrexit;
   local _cmd _ret=0
   for _cmd; do
     if (( \${+functions[\$_cmd]} )); then
@@ -861,27 +861,29 @@ which() {
   done
   return \$_ret
 }
-realpath() {
+realpath() { setopt localoptions noerrexit;
   local _f
   for _f; do print -- \${_f:A}; done
 }
-ln() {
+ln() { setopt localoptions noerrexit;
   local _sym=0 _force=0
+  local -a _flags
   while [[ \${1-} == -* ]]; do
     [[ $1 == *s* ]] && _sym=1
     [[ $1 == *f* ]] && _force=1
     shift
   done
-  if (( _sym )); then zf_symlink $1 $2
-  else               zf_ln      $1 $2
-  fi
+  # zf_ln -s, not zf_symlink: the latter kills the whole script in this build.
+  (( _sym ))   && _flags+=(-s)
+  (( _force )) && _flags+=(-f)
+  zf_ln \$_flags $1 $2
 }
-base64() {
+base64() { setopt localoptions noerrexit;
   local _d=0
   [[ \${1-} == -d || \${1-} == --decode ]] && { _d=1; shift; }
   local _alpha='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   local _in _out='' _i _len _b0 _b1 _b2 _v
-  IFS= read -r -d '' _in
+  IFS= read -r -d '' _in || true
   _in=\${_in%$'\\n'}
   if (( !_d )); then
     _len=\${#_in}
@@ -942,35 +944,35 @@ base64() {
     printf '%b\\n' "\$_out"
   fi
 }
-_zw_stub() {
+_zw_stub() { setopt localoptions noerrexit;
   print -u2 "zsh-wasm: '\${funcstack[2]}' is not available — $1"
   return 127
 }
-curl()    { _zw_stub 'no network access in zsh-wasm. Pass data via the stdin option.' }
-wget()    { _zw_stub 'no network access in zsh-wasm. Pass data via the stdin option.' }
-git()     { _zw_stub 'requires a real filesystem and network; not available in wasm.' }
-python()  { _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
-python3() { _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
-python2() { _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
-ruby()    { _zw_stub 'Ruby is not available; zsh-wasm runs zsh scripts only.' }
-perl()    { _zw_stub 'Perl is not available; zsh-wasm runs zsh scripts only.' }
-node()    { _zw_stub 'Node.js is not available inside the wasm worker.' }
-npm()     { _zw_stub 'npm is not available inside the wasm worker.' }
-docker()  { _zw_stub 'Docker requires a host OS kernel — not possible in wasm.' }
-ssh()     { _zw_stub 'no network access in zsh-wasm.' }
-sudo()    { _zw_stub 'privilege escalation is not possible in the wasm sandbox.' }
-tar()     { _zw_stub 'tar is not shimmed. Use zsh glob expansion or cp/mv instead.' }
-gzip()    { _zw_stub 'compression is not supported in zsh-wasm.' }
-make()    { _zw_stub 'make is not available; only zsh builtins and shimmed commands run in wasm.' }
-gcc()     { _zw_stub 'compilers are not available in zsh-wasm.' }
-clang()   { _zw_stub 'compilers are not available in zsh-wasm.' }
-vim()     { _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
-vi()      { _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
-nano()    { _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
-less()    { _zw_stub 'pagers require an interactive terminal — not available in zsh-wasm.' }
-more()    { _zw_stub 'pagers require an interactive terminal — not available in zsh-wasm.' }
-man()     { _zw_stub 'man pages are not available in zsh-wasm.' }
-ping()    { _zw_stub 'no network access in zsh-wasm.' }
+curl()    { setopt localoptions noerrexit; _zw_stub 'no network access in zsh-wasm. Pass data via the stdin option.' }
+wget()    { setopt localoptions noerrexit; _zw_stub 'no network access in zsh-wasm. Pass data via the stdin option.' }
+git()     { setopt localoptions noerrexit; _zw_stub 'requires a real filesystem and network; not available in wasm.' }
+python()  { setopt localoptions noerrexit; _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
+python3() { setopt localoptions noerrexit; _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
+python2() { setopt localoptions noerrexit; _zw_stub 'Python is not available; zsh-wasm runs zsh scripts only.' }
+ruby()    { setopt localoptions noerrexit; _zw_stub 'Ruby is not available; zsh-wasm runs zsh scripts only.' }
+perl()    { setopt localoptions noerrexit; _zw_stub 'Perl is not available; zsh-wasm runs zsh scripts only.' }
+node()    { setopt localoptions noerrexit; _zw_stub 'Node.js is not available inside the wasm worker.' }
+npm()     { setopt localoptions noerrexit; _zw_stub 'npm is not available inside the wasm worker.' }
+docker()  { setopt localoptions noerrexit; _zw_stub 'Docker requires a host OS kernel — not possible in wasm.' }
+ssh()     { setopt localoptions noerrexit; _zw_stub 'no network access in zsh-wasm.' }
+sudo()    { setopt localoptions noerrexit; _zw_stub 'privilege escalation is not possible in the wasm sandbox.' }
+tar()     { setopt localoptions noerrexit; _zw_stub 'tar is not shimmed. Use zsh glob expansion or cp/mv instead.' }
+gzip()    { setopt localoptions noerrexit; _zw_stub 'compression is not supported in zsh-wasm.' }
+make()    { setopt localoptions noerrexit; _zw_stub 'make is not available; only zsh builtins and shimmed commands run in wasm.' }
+gcc()     { setopt localoptions noerrexit; _zw_stub 'compilers are not available in zsh-wasm.' }
+clang()   { setopt localoptions noerrexit; _zw_stub 'compilers are not available in zsh-wasm.' }
+vim()     { setopt localoptions noerrexit; _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
+vi()      { setopt localoptions noerrexit; _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
+nano()    { setopt localoptions noerrexit; _zw_stub 'interactive editors are not available in zsh-wasm (no terminal).' }
+less()    { setopt localoptions noerrexit; _zw_stub 'pagers require an interactive terminal — not available in zsh-wasm.' }
+more()    { setopt localoptions noerrexit; _zw_stub 'pagers require an interactive terminal — not available in zsh-wasm.' }
+man()     { setopt localoptions noerrexit; _zw_stub 'man pages are not available in zsh-wasm.' }
+ping()    { setopt localoptions noerrexit; _zw_stub 'no network access in zsh-wasm.' }
 `;
 
 // Pool of pre-warmed Web Workers. Each worker holds a fully initialized wasm

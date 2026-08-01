@@ -990,11 +990,35 @@ const tests = [
     { name: 'realpath-relative',
       script: "mkdir -p /tmp/rpdir\ntouch /tmp/rpdir/file.txt\ncd /tmp/rpdir\nrealpath file.txt",
       expected: '/tmp/rpdir/file.txt' },
-    // ln (hard link only; MEMFS symlinks are not supported)
+    // ln: symlinks work via `zf_ln -s`. `zf_symlink` does not — it takes the whole
+    // script down with it, which is why the shim must not call it.
+    { name: 'ln-symlink',
+      script: "echo sdata > /tmp/lns_src.txt\nln -s /tmp/lns_src.txt /tmp/lns_dst.txt\ncat /tmp/lns_dst.txt\n[[ -L /tmp/lns_dst.txt ]] && echo linked",
+      expected: 'sdata\nlinked' },
+    { name: 'ln-symlink-force',
+      script: "echo sdata > /tmp/lnf_src.txt\nln -s /tmp/lnf_src.txt /tmp/lnf_dst.txt\nln -sf /tmp/lnf_src.txt /tmp/lnf_dst.txt\necho status=$?",
+      expected: 'status=0' },
     { name: 'ln-hardlink',
       script: "echo hdata > /tmp/lnh_src.txt\nln /tmp/lnh_src.txt /tmp/lnh_dst.txt\ncat /tmp/lnh_dst.txt",
       expected: 'hdata',
       knownFail: 'zf_ln (hard link) not supported in MEMFS' },
+    // `setopt errexit` (set -e) is common in real scripts. Every shim must survive
+    // it: a `(( flag )) && ...` test that happens to be false inside a shim used to
+    // abort the caller's whole script, and `read -r -d ''` always "fails" at EOF.
+    { name: 'errexit-shims',
+      script: "setopt errexit\nprintf 'b\\na\\n' > /tmp/ee.txt\ncat /tmp/ee.txt > /dev/null\nwc -l /tmp/ee.txt > /dev/null\ngrep a /tmp/ee.txt > /dev/null\nsort /tmp/ee.txt > /dev/null\nhead -1 /tmp/ee.txt > /dev/null\nfind /tmp -name ee.txt > /dev/null\nenv > /dev/null\necho survived",
+      expected: 'survived' },
+    { name: 'errexit-stdin-shims',
+      script: "setopt errexit\nprintf 'b\\na\\n' > /tmp/ee2.txt\ncat < /tmp/ee2.txt > /dev/null\nsort < /tmp/ee2.txt > /dev/null\ncut -c1 < /tmp/ee2.txt > /dev/null\nbase64 < /tmp/ee2.txt > /dev/null\necho survived",
+      expected: 'survived' },
+    { name: 'errexit-pipeline',
+      script: "setopt errexit\nprint -l x y | sort | grep x | wc -l\necho survived",
+      expected: '1\nsurvived' },
+    // a successful shim reports success — `env` used to return the status of the
+    // last [[ ]] test in its loop
+    { name: 'shim-exit-status',
+      script: "env > /dev/null; echo env=$?\nfind /tmp -name nothing-matches-this > /dev/null; echo find=$?\nls /tmp > /dev/null; echo ls=$?",
+      expected: 'env=0\nfind=0\nls=0' },
     // base64
     { name: 'base64-encode',
       script: "printf 'Hello' | base64",

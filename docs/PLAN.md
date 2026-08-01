@@ -170,6 +170,31 @@ from `IFS= read -r -d '' content` instead of `$(<$f)`.
 
 ---
 
+1e. `setopt errexit` compatibility in the shims (done)
+------------------------------------------------------
+
+Found while sweeping for pipeline regressions, but pre-existing and unrelated to
+pipelines: under `setopt errexit` (`set -e`) — which real scripts use constantly —
+most shims took the whole script down. Three separate causes:
+
+1. `IFS= read -r -d '' var` never finds its NUL delimiter in text input, so it
+   returns 1 at EOF. Every stdin-reading shim did this. Now `|| true`.
+2. A shim's internal `(( flag )) && ...` test returning false is a failed command
+   as far as errexit is concerned, and there are hundreds of them. Each shim now
+   opens with `setopt localoptions noerrexit`, which shields its internals and is
+   undone on return, leaving the shim's own exit status to speak for it.
+3. `env` with no command returned the status of the last `[[ ]]` in its loop
+   rather than its own success. Now `return 0`.
+
+Also fixed alongside: the `ln` shim called `zf_symlink`, which does not merely
+fail in this build — it ends the script, with no message. `zf_ln -s` does the
+same job correctly, and `-f` is now passed through instead of parsed and dropped.
+
+Tests: `errexit-shims`, `errexit-stdin-shims`, `errexit-pipeline`,
+`shim-exit-status`, `ln-symlink`, `ln-symlink-force`.
+
+---
+
 2. Compiled grep (--with-grep)
 ------------------------------
 

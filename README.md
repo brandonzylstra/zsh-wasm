@@ -442,7 +442,7 @@ most common ones:
 | `printenv`| `[VAR ...]`          | prints value of named variables, or all exported variables |
 | `which`   | —                    | identifies commands as shell functions, builtins, or external; exits 1 if not found |
 | `realpath`| —                    | resolves absolute path using zsh's `:A` modifier |
-| `ln`      | `-s`, `-f`           | symlinks via `zf_symlink`; hard links (`zf_ln`) not supported in MEMFS |
+| `ln`      | `-s`, `-f`           | symlinks via `zf_ln -s`; hard links are not supported in MEMFS |
 | `base64`  | `-d`/`--decode`      | encode stdin to Base64 (76-char line wrap); decode Base64 to bytes |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
@@ -482,6 +482,8 @@ Known Limitations
   `x=outer; (x=inner); echo $x` prints `inner`, not `outer`. True isolation requires
   `fork()`, which is not available in wasm.
 - **`tr` reads only from stdin** — use `tr args < file` or a pipe, not a file argument.
+- **Hard links are not supported** — `ln src dst` fails with "too many links" (a MEMFS
+  limitation). `ln -s` works.
 - **`TZ` supports UTC offsets only** — `TZ=UTC`, `TZ=UTC±H`, `TZ=UTC±H:MM`, and `TZ=±HH:MM` work. Named timezones (`TZ=America/New_York`) are not supported (no tzdata); `date` falls back to browser local time with a stderr warning.
 - **Background jobs run in the foreground** — `&` requires `fork()`, so `cmd &` runs
   `cmd` synchronously and the script continues once it finishes. Nothing actually

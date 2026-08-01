@@ -157,19 +157,6 @@ function zshWasmLint(text) {
             });
         }
 
-        // |& — pipe stdout+stderr — requires fork
-        const pipeErrRe = /\|&/g;
-        while ((m = pipeErrRe.exec(line)) !== null) {
-            if (lintInQuote(line, m.index)) continue;
-            diags.push({
-                from: CodeMirror.Pos(ln, m.index),
-                to:   CodeMirror.Pos(ln, m.index + 2),
-                severity: 'error',
-                message: '|& (pipe stdout+stderr) requires fork() — not supported in zsh-wasm.\n'
-                       + 'Redirect stderr to a file explicitly: 2>/tmp/err.',
-            });
-        }
-
         // Background job & (not && and not |& and not &>)
         const bgRe = /(?<![|&])&(?![&|>])/g;
         while ((m = bgRe.exec(line)) !== null) {
@@ -180,9 +167,11 @@ function zshWasmLint(text) {
             diags.push({
                 from: CodeMirror.Pos(ln, m.index),
                 to:   CodeMirror.Pos(ln, m.index + 1),
-                severity: 'error',
-                message: 'Background jobs (&) are not supported in zsh-wasm — there is no job control.\n'
-                       + 'Run commands sequentially, or use a worker pool for parallel execution.',
+                severity: 'warning',
+                message: 'Background jobs (&) need fork(), which wasm does not have.\n'
+                       + 'This runs the command in the foreground instead: the script waits for it, '
+                       + 'and nothing runs concurrently.\n'
+                       + 'For real parallelism, use a worker pool on the JS side.',
             });
         }
 
