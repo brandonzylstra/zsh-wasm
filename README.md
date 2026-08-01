@@ -268,12 +268,12 @@ seq, mktemp, sleep, find (`-name`/`-type`/`-maxdepth`/`-newer`), env/printenv, s
 `${var:-default}`, upper/lower case), brace expansion, array/associative-array
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
 `$(...)` command substitution, `$(< file)` file substitution, `zf_rm`, `zstat`,
-pipe simulation (`a | b` rewritten to temp-file chaining), subshell simulation
-(`(cmd)` rewritten to `{ cmd }` at top level), `fork: 'off'` no-pipe path,
+pipelines (`a | b | c`, `|&`, pipelines inside `$( )`, functions and `while read`
+loops, repeated invocations of the compiled sed/awk/bc from a pipe), subshells,
 `createPool`/parallel execution/`shutdownDefaultPool`, and per-test rerun buttons in the test UI.
 
-Known limitation: subshell variable mutations leak into the outer scope (`(x=inner)` is
-rewritten to `{ x=inner }` — no true process isolation without fork).
+Known limitation: subshell variable mutations leak into the outer scope — without
+`fork()` the body of `( )` runs in this shell, so `(x=inner)` changes `x`.
 
 Scripts
 -------
@@ -312,8 +312,8 @@ bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
                this repo).
   --with-bc    Compile Gavin Howard bc into the wasm binary as a `bc` builtin.
                Requires bc-src/ in the project root (included in this repo).
-               bc <<< 'scale=4; 22/7' and heredoc input work; pipes to bc do not
-               (pipes require fork). dc is also available.
+               `echo 'scale=4; 22/7' | bc`, here-strings and heredocs all
+               work. dc is also available.
 ```
 
 JS modules
@@ -381,6 +381,32 @@ With IDBFS, files written under `/home/user` persist across page reloads and
 are shared between all script blocks on the page (each run syncs in from IndexedDB
 before executing and syncs out after).
 
+### Pipelines
+
+`a | b | c` works, including `|&`, pipelines inside `$( )`, functions and loops,
+and pipelines feeding the compiled `sed`, `awk` and `bc`:
+
+```zsh
+echo 'scale=4; 22/7' | bc              # 3.1428
+printf 'c\na\nb\n' | sort | head -2   # a b
+seq 100 | awk '{ total += $1 } END { print total }'
+```
+
+This is real zsh pipeline parsing, not a rewrite of the source text: nothing
+inspects the script for `|` characters, so case-pattern alternations (`py|python)`),
+glob qualifiers (`*(.)`) and anonymous functions (`() { ... }`) are never mistaken
+for pipelines.
+
+How it works: a pipeline normally runs each stage in its own forked process.
+Wasm has no `fork()`, so `Src/exec.c` is patched (by `bin/setup`) to run each
+stage in the current shell instead, one after another, with a temp file carrying
+each stage's output on to the next. A real pipe cannot be used for this, because
+Emscripten's pipe reports `EAGAIN` rather than end-of-file once drained, so a
+stage reading a finished pipe would never see EOF.
+
+The consequences are listed under Known Limitations: no isolation between stages,
+and no streaming.
+
 ### Built-in shims
 
 WebAssembly cannot `fork`, so external binaries (`touch`, `cat`, `ls`, etc.) fail
@@ -406,7 +432,7 @@ most common ones:
 | `basename`| suffix arg           | strips directory and optional suffix (`basename /a/b.txt .txt` → `b`) |
 | `dirname` | —                    | strips last component (`dirname /a/b` → `/a`; `dirname foo` → `.`) |
 | `rm`      | `-f` `-r`/`-rf`      | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
-| `tee`     | `-a`                 | reads all stdin, writes to file(s) and stdout; use with `< file` or `<<< str`, not pipes |
+| `tee`     | `-a`                 | reads all stdin, writes to file(s) and stdout |
 | `seq`     | `N`, `start N`, `start step N` | integer sequence; `seq 0 2 10` → `0 2 4 6 8 10` |
 | `mktemp`  | `-d`, template       | creates temp file or dir; replaces trailing `X`'s with random digits |
 | `sleep`   | seconds (float)      | real sleep via `Atomics.wait()` in the Web Worker when `SharedArrayBuffer` is available (requires COOP+COEP headers); prints a stderr diagnostic and continues otherwise |
@@ -425,9 +451,9 @@ When built with `--with-sed`, `--with-awk`, and/or `--with-bc`, compiled-in buil
 
 | Command | Flag      | Source    | Notes |
 |---------|-----------|-----------|-------|
-| `sed`   | `--with-sed` | OpenBSD sed | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. Use file args; stdin via `<<< text` works. |
-| `awk`   | `--with-awk` | one-true-awk (BWK) | Full awk: patterns, BEGIN/END, field splitting (`-F`), variables (`-v`), gsub/sub/split, printf. File args or `awk 'prog' <<< data` work; pipes require fork and don't work. |
-| `bc`    | `--with-bc`  | Gavin Howard bc (MIT) | Arbitrary-precision math: `scale`, `sqrt()`, user-defined functions. Use `bc <<< 'expr'` or heredoc; `echo expr \| bc` requires fork. `dc` is also available. |
+| `sed`   | `--with-sed` | OpenBSD sed | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. File args, `<<< text` and pipes all work. |
+| `awk`   | `--with-awk` | one-true-awk (BWK) | Full awk: patterns, BEGIN/END, field splitting (`-F`), variables (`-v`), gsub/sub/split, printf. File args, `<<< data` and pipes all work. |
+| `bc`    | `--with-bc`  | Gavin Howard bc (BSD-2-Clause) | Arbitrary-precision math: `scale`, `sqrt()`, user-defined functions. `echo 'scale=2; 22/7' \| bc`, `bc <<< 'expr'` and heredocs all work. `dc` is also available. |
 
 Known Limitations
 -----------------
@@ -444,16 +470,22 @@ Known Limitations
   (no subshell isolation); (2) output larger than the OS pipe buffer (~64 KB) would
   deadlock. For typical scripting workloads neither limit matters. `$(< file)` is
   handled by a separate fast path and has no such restrictions.
-- **Subshell `(...)` variable isolation** — `(cmd)` subshells are rewritten by
-  `simulatePipes()` to `{ cmd }` group commands so they execute, but variable
-  mutations inside leak into the parent scope. `x=outer; (x=inner); echo $x`
-  prints `inner` not `outer`. True isolation requires `fork()`, which is not
-  available in wasm.
-- **`tr` reads only from stdin** — use `tr args < file`; pipes require fork and don't work.
-- **`sed` (--with-sed build) reads only from file args** — C-level stdin reads in zsh builtins bypass the wasm pipe simulation; use `sed 's/x/y/' file` not `echo x | sed 's/x/y/'`.
-- **`awk` (--with-awk build) reads only from file args** — same constraint as sed; use `awk 'prog' file` or `awk 'prog' <<< "data"` not `echo data | awk 'prog'`.
+- **Pipeline stages are not isolated** — `a | b` works (see "Pipelines" above), but
+  because every stage runs in this one shell, an assignment in a stage outlives it
+  (`echo x | read value` leaves `value` set — useful, and the opposite of bash) and
+  an `exit` in a stage ends the whole script rather than just that stage. Stages run
+  one at a time, in order, so a pipeline never streams: each stage reads its input
+  only after the previous one has finished writing all of it. `cmd | head -1` still
+  runs `cmd` to completion.
+- **Subshell `(...)` variable isolation** — the body of a `( )` subshell runs in this
+  shell, so variable mutations inside leak into the parent scope.
+  `x=outer; (x=inner); echo $x` prints `inner`, not `outer`. True isolation requires
+  `fork()`, which is not available in wasm.
+- **`tr` reads only from stdin** — use `tr args < file` or a pipe, not a file argument.
 - **`TZ` supports UTC offsets only** — `TZ=UTC`, `TZ=UTC±H`, `TZ=UTC±H:MM`, and `TZ=±HH:MM` work. Named timezones (`TZ=America/New_York`) are not supported (no tzdata); `date` falls back to browser local time with a stderr warning.
-- **Background jobs are not supported** — the `&` operator requires `fork()`. Running a command in the background will abort the script.
+- **Background jobs run in the foreground** — `&` requires `fork()`, so `cmd &` runs
+  `cmd` synchronously and the script continues once it finishes. Nothing actually
+  runs concurrently, and `wait` has no job to wait for.
 - **Process substitution is not supported** — `<(cmd)` and `>(cmd)` require `fork()` and will abort the script. Use a temp file or a here-string (`<<<`) instead.
 - **`sleep` requires COOP+COEP headers for real blocking** — without `SharedArrayBuffer` (cross-origin isolation), `sleep` is a no-op and a stderr diagnostic is printed. The demo site is served with the required headers; set them on your own server to get real blocking.
 - **stdin is always newline-terminated** — if the string passed as `stdin` does

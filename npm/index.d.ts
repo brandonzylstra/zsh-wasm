@@ -8,10 +8,9 @@ export interface RunOptions {
    */
   fs?: 'memfs' | 'idbfs' | null;
   /**
-   * Fork/pipe strategy.
-   * - `'simulate'` (default) — rewrites `a | b` as temp-file chaining so pipes work without fork().
-   * - `'off'` — no transformation; pipes fail silently with a diagnostic in stderr.
-   * Future: `'native'` for a wasm-threads build with real fork().
+   * @deprecated Ignored since 0.2.0. Pipelines are now run by zsh itself, so
+   * there is no longer a JS-side rewrite to turn on or off. Passing this has
+   * no effect; the property is kept so existing callers still type-check.
    */
   fork?: 'simulate' | 'off';
   /**
@@ -25,10 +24,10 @@ export interface RunOptions {
   busySleepFallback?: boolean;
   /**
    * Milliseconds to wait for a script before giving up. If the run does not
-   * finish in time (e.g. an infinite loop, or a compiled tool such as `bc` that
-   * blocks when invoked more than once per run), the promise rejects with a
-   * timeout error and the underlying worker is terminated and replaced, so
-   * later runs are unaffected. Default: `30000`.
+   * finish in time (e.g. an infinite loop, or a command waiting on input that
+   * never arrives), the promise rejects with a timeout error and the underlying
+   * worker is terminated and replaced, so later runs are unaffected.
+   * Default: `30000`.
    */
   timeoutMs?: number;
 }

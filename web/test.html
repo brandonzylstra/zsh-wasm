@@ -641,14 +641,14 @@ const tests = [
     { name: 'subshell-nested',
       script: "(echo $(echo deep))",
       expected: 'deep' },
-    // subshell limitation: variable mutations inside ( ) leak into the outer scope
-    // because `(cmd)` is rewritten to `{ cmd }` (no true process isolation without fork).
+    // subshell limitation: variable mutations inside ( ) leak into the outer scope,
+    // because without fork() the body runs in this shell (no process isolation).
     { name: 'subshell-isolation',
       script: "x=outer; (x=inner); echo $x",
       expected: 'outer',
       knownFail: true },
-    // case-pattern alternation: the `|` in `py|python)` must NOT be treated as a
-    // pipeline operator by simulatePipes() (regression: parse error near the pattern).
+    // case-pattern alternation: the `|` in `py|python)` is not a pipeline operator.
+    // zsh's own parser tells the two apart; a JS rewriter used to have to guess.
     { name: 'case-alternation',
       script: "for x in py js rb; do case $x in py|python) echo P ;; js|ts) echo J ;; *) echo O ;; esac; done",
       expected: 'P\nJ\nO' },
@@ -656,12 +656,14 @@ const tests = [
     { name: 'case-multi-alternation',
       script: "for v in 5.9 6.0 4.2; do case $v in 5.*|5) echo cur ;; 6.*) echo next ;; *) echo old ;; esac; done",
       expected: 'cur\nnext\nold' },
-    // glob qualifier *(.) selects regular files only — the `(.)` must NOT be
-    // rewritten to a `{ . }` subshell by simulatePipes() (regression: parse error near `}`).
+    // glob qualifier *(.) selects regular files only — `(.)` is a qualifier, not a
+    // subshell.  Another distinction a JS rewriter used to have to guess at.
     { name: 'glob-qualifier-files',
       script: "mkdir -p /tmp/gqt/sub; : > /tmp/gqt/a.txt; : > /tmp/gqt/b.txt; for f in /tmp/gqt/*(.); do echo \${f:t}; done",
       expected: 'a.txt\nb.txt' },
-    // pipe simulation: | transformed to temp-file chaining by simulatePipes()
+    // Pipelines.  zsh itself runs these: without fork() each stage runs in the
+    // current shell, one after another, with a temp file carrying the output on
+    // to the next stage (see the __EMSCRIPTEN__ blocks in Src/exec.c).
     { name: 'pipe-simple',
       script: "echo hello | grep hello",
       expected: 'hello' },
@@ -677,18 +679,57 @@ const tests = [
     { name: 'pipe-multi',
       script: "echo one | cat\necho two | cat",
       expected: 'one\ntwo' },
-    // with fork:'off', pipes fail and a helpful diagnostic appears in stderr
-    { name: 'pipe-helpful-error',
-      script: "echo hello | grep hello",
-      fork: 'off',
-      expected: 'zsh-wasm:',
-      checkStderr: true,
-      matchIncludes: true },
-    // with fork:'off', pipe-free scripts still run normally
-    { name: 'fork-off-nopipe',
-      script: "x=42; echo result=$x",
-      fork: 'off',
-      expected: 'result=42' },
+    // five stages: every intermediate stage both reads and writes a temp file
+    { name: 'pipe-five-stages',
+      script: "printf 'b\\na\\nc\\na\\n' | sort | uniq | grep -v c | tr a-z A-Z | cat",
+      expected: 'A\nB' },
+    // the exit status of a pipeline is the status of its last stage
+    { name: 'pipe-exit-status',
+      script: "true | false; echo first=$?; false | true; echo second=$?",
+      expected: 'first=1\nsecond=0' },
+    // a stage that reads stdin line by line rather than all at once
+    { name: 'pipe-while-read',
+      script: "print -l one two | while read line; do echo \"[$line]\"; done",
+      expected: '[one]\n[two]' },
+    // a pipeline inside $( ), which itself runs without fork()
+    { name: 'pipe-in-cmdsubst',
+      script: "result=$(print -l b a | sort | head -1); echo got=$result",
+      expected: 'got=a' },
+    // a pipeline inside a shell function
+    { name: 'pipe-in-function',
+      script: "sorted() { print -l z y x | sort }; sorted",
+      expected: 'x\ny\nz' },
+    // a pipeline whose first stage is a ( ) subshell
+    { name: 'pipe-from-subshell',
+      script: "(echo beta; echo alpha) | sort",
+      expected: 'alpha\nbeta' },
+    // |& pipes stderr as well as stdout
+    { name: 'pipe-stderr-both',
+      script: "{ print -u2 warned } |& sed 's/warned/CAUGHT/'",
+      expected: 'CAUGHT' },
+    // more data than a pipe buffer would hold: the temp file has no such limit
+    { name: 'pipe-large-output',
+      script: "{ repeat 500 print '0123456789012345678901234567890123456789' } | wc -l",
+      expected: '500' },
+    // redirections and pipes together
+    { name: 'pipe-into-redirect',
+      script: "print -l b a | sort > /tmp/piperedir.txt; cat /tmp/piperedir.txt",
+      expected: 'a\nb' },
+    // a compiled builtin reading a pipe more than once per run: each invocation
+    // gets a new fd 0 but shares one stdin FILE, so its EOF flag must be reset
+    { name: 'pipe-sed-twice',
+      script: "echo a | sed s/a/b/; echo c | sed s/c/d/",
+      expected: 'b\nd' },
+    { name: 'pipe-awk-twice',
+      script: "printf 'x y\\n' | awk '{print $1}'; printf 'p q\\n' | awk '{print $2}'",
+      expected: 'x\nq' },
+    { name: 'pipe-bc-twice',
+      script: "echo '1+1' | bc; echo '2+2' | bc",
+      expected: '2\n4' },
+    // the idiom that motivated all of this
+    { name: 'pipe-echo-into-bc',
+      script: "echo 'scale=4; 22/7' | bc",
+      expected: '3.1428' },
     // worker pool: createPool / parallel execution / shutdown
     { name: 'pool-basic',
       run: async () => {
@@ -1165,7 +1206,7 @@ async function runTest(t, tr) {
         if (t.run) {
             result = await t.run();
         } else {
-            result = await runZshScript(t.script, { stdin: t.stdin ?? null, fork: t.fork ?? 'simulate' });
+            result = await runZshScript(t.script, { stdin: t.stdin ?? null });
         }
     } catch(e) {
         result = { stdout: '', stderr: String(e), exitCode: 1 };

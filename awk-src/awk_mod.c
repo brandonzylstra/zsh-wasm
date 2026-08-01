@@ -10,6 +10,7 @@
 
 #include "awk.mdh"
 #include "awk_embed.h"
+#include "embed_stdin.h"
 
 /**/
 static int
@@ -25,6 +26,8 @@ bin_awk(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
     for (int i = 0; i < n; i++)
         argv[i + 1] = args[i];
     argv[n + 1] = NULL;
+
+    reset_embedded_stdin();
 
     if (setjmp(awk_exit_jmp)) {
         fflush(stdout);

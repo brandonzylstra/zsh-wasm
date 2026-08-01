@@ -167,6 +167,38 @@ you add the Step 2 release workflow) a GitHub Release.
 
 ---
 
+Breaking change in 0.2.0: `simulatePipes()` is gone
+---------------------------------------------------
+
+Pipelines are now run by zsh itself (see `docs/PLAN.md` section 6), so
+`web/zsh-runtime.js` no longer contains `simulatePipes()`, `hasPipelineOp()` or
+`pipeIsCasePattern()`, and `runZshScript()` ignores the `fork` option.
+
+**CodeCompared vendors those functions.** `scripts/fetch-zsh-runtime.mjs` slices
+the upstream runtime between `function hasPipelineOp` and `class WorkerPool` and
+writes them into `public/zsh/zsh-shims.js`, which exposes
+`global.__zshShims = { BUILTINS_PREAMBLE, simulatePipes, hasPipelineOp, isRuntimeNoise }`.
+Against 0.2.0 that slice throws `could not locate the pipeline-rewriting functions
+upstream`, so the vendoring script must be updated before the version bump:
+
+1. Drop the `pipesStart`/`pipesEnd` slice and the `pipelineFunctions` interpolation
+   from `scripts/fetch-zsh-runtime.mjs`; keep `isRuntimeNoise` and
+   `BUILTINS_PREAMBLE`, which are unchanged.
+2. Export only `{ BUILTINS_PREAMBLE, isRuntimeNoise }` from `__zshShims`, and
+   update the header comment, which currently explains the rewriting trick.
+3. Remove the `simulatePipes(...)` call and any `hasPipelineOp(...)` guard from
+   `ZshRunner` — hand the script to zsh unchanged.
+
+Leaving the rewriter in place would still work (it produces valid zsh either
+way), but it would keep the bug class it carries: source it should not touch,
+such as an anonymous function `() { ... }`, comes out mangled unless every caller
+remembers the `hasPipelineOp()` guard first.
+
+The preamble shims are still needed and still vendored: `wc`, `grep`, `sort` and
+friends are what the pipeline stages actually run.
+
+---
+
 Step 3: Update CodeCompared
 ---------------------------
 

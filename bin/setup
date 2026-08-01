@@ -140,6 +140,262 @@ PYEOF
     echo "    exec.c: patched for wasm command substitution"
 fi
 
+# exec.c: run pipeline stages in-process when fork() is unavailable.
+#
+# Without this, `a | b` produces nothing at all: the stage that would have been
+# a child process fails to fork and the shell takes the fatal error path.  The
+# patch below makes each stage run in the current shell, one after another,
+# with its output going to a temp file that the next stage reads.  It mirrors
+# what the command-substitution patch above already does for $( ).
+if grep -q 'zsh_wasm_nofork' "$SRC/Src/exec.c"; then
+    echo "    exec.c: already patched for wasm pipelines"
+else
+    python3 - "$SRC/Src/exec.c" << 'PYEOF'
+import re
+import sys
+
+# Every literal below is plain ASCII on purpose: the file already contains
+# non-ASCII comment text, and matching it through a shell heredoc is a good way
+# to produce a patch that silently fails to apply.
+
+path = sys.argv[1]
+with open(path) as source_file:
+    source = source_file.read()
+
+def replace_once(source, old, new, description):
+    if new in source:
+        return source          # already applied
+    if old not in source:
+        print('ERROR: could not find %s in exec.c' % description, file=sys.stderr)
+        raise SystemExit(1)
+    return source.replace(old, new, 1)
+
+# 1. A flag recording that fork() really is unavailable (rather than having
+#    failed for some other reason), set the first time zfork() sees ENOSYS.
+OLD_FLAG = (
+    '/* fork and set limits */\n'
+    '\n'
+    '/**/\n'
+    'static pid_t\n'
+    'zfork(struct timeval *tv)\n'
+)
+NEW_FLAG = (
+    '#ifdef __EMSCRIPTEN__\n'
+    '/*\n'
+    ' * Set once fork() has been seen to fail with ENOSYS, which under wasm means\n'
+    ' * it is missing rather than merely out of resources.  Pipeline stages check\n'
+    ' * this before falling back to running in the current shell.\n'
+    ' */\n'
+    'static int zsh_wasm_nofork = 0;\n'
+    '#endif\n'
+    '\n'
+    '/* fork and set limits */\n'
+    '\n'
+    '/**/\n'
+    'static pid_t\n'
+    'zfork(struct timeval *tv)\n'
+)
+source = replace_once(source, OLD_FLAG, NEW_FLAG, 'the zfork definition')
+
+# The trailing comment on the return is matched loosely: it contains an em dash
+# that is awkward to reproduce byte-for-byte from here.
+ENOSYS_PATTERN = re.compile(
+    r'#ifdef __EMSCRIPTEN__\n'
+    r'\tif \(errno == ENOSYS\)\n'
+    r'\t    return -1;(?P<comment>[^\n]*)\n'
+    r'#endif\n')
+
+def brace_enosys(match):
+    return ('#ifdef __EMSCRIPTEN__\n'
+            '\tif (errno == ENOSYS) {\n'
+            '\t    zsh_wasm_nofork = 1;\n'
+            '\t    return -1;' + match.group('comment') + '\n'
+            '\t}\n'
+            '#endif\n')
+
+source, substitutions = ENOSYS_PATTERN.subn(brace_enosys, source, count=1)
+if not substitutions:
+    print('ERROR: could not find the zfork ENOSYS fallback in exec.c', file=sys.stderr)
+    raise SystemExit(1)
+
+# 2. The channel between two stages.  A real pipe cannot be used: Emscripten's
+#    pipe never reports end-of-file, so a stage reading a drained pipe gets
+#    EAGAIN forever instead of EOF.
+OLD_STAGEFILE = (
+    '/* execute pipeline.  This function assumes the `pline\' is not NULL. */\n'
+)
+NEW_STAGEFILE = (
+    '#ifdef __EMSCRIPTEN__\n'
+    '/*\n'
+    ' * Create the channel carrying one pipeline stage\'s output to the next.\n'
+    ' *\n'
+    ' * Wasm has no fork(), so stages run one after another in this shell (see the\n'
+    ' * fallbacks in execcmd_exec) instead of concurrently.  A real pipe cannot\n'
+    ' * carry the data between them: Emscripten\'s pipe reports EAGAIN rather than\n'
+    ' * end-of-file once drained, so the reading stage would never see EOF.  A temp\n'
+    ' * file is correct for sequential stages: the writer has finished by the time\n'
+    ' * the reader starts, so the reader sees the whole output and then a normal\n'
+    ' * EOF.  The file is unlinked at once and lives only as long as the two\n'
+    ' * descriptors do.\n'
+    ' */\n'
+    '\n'
+    'static int\n'
+    'stagefile(int *pp)\n'
+    '{\n'
+    '    char *name;\n'
+    '    int readfd, writefd;\n'
+    '\n'
+    '    if ((writefd = gettempfile(NULL, 1, &name)) < 0) {\n'
+    '\tzerr("can\'t create temp file for pipeline: %e", errno);\n'
+    '\treturn -1;\n'
+    '    }\n'
+    '    readfd = open(name, O_RDONLY | O_NOCTTY);\n'
+    '    unlink(name);\n'
+    '    if (readfd < 0) {\n'
+    '\tzerr("can\'t open temp file for pipeline: %e", errno);\n'
+    '\tclose(writefd);\n'
+    '\treturn -1;\n'
+    '    }\n'
+    '    pp[0] = movefd(readfd);\n'
+    '    pp[1] = movefd(writefd);\n'
+    '    return 0;\n'
+    '}\n'
+    '#endif /* __EMSCRIPTEN__ */\n'
+    '\n'
+    '/* execute pipeline.  This function assumes the `pline\' is not NULL. */\n'
+)
+source = replace_once(source, OLD_STAGEFILE, NEW_STAGEFILE, 'the execpline2 comment')
+
+# 3. execpline2: use the temp-file channel and hand the stage its own copy of
+#    the write end.
+OLD_PIPE = (
+    '\tif (mpipe(pipes) < 0) {\n'
+    '\t    /* FIXME */\n'
+    '\t}\n'
+    '\n'
+    '\taddfilelist(NULL, pipes[0]);\n'
+    '\texeccmd_exec(state, &eparams, input, pipes[1], how, 0, pipes[0]);\n'
+    '\tzclose(pipes[1]);\n'
+)
+NEW_PIPE = (
+    '#ifdef __EMSCRIPTEN__\n'
+    '\tif (stagefile(pipes) < 0) {\n'
+    '\t    /* FIXME */\n'
+    '\t}\n'
+    '#else\n'
+    '\tif (mpipe(pipes) < 0) {\n'
+    '\t    /* FIXME */\n'
+    '\t}\n'
+    '#endif\n'
+    '\n'
+    '\taddfilelist(NULL, pipes[0]);\n'
+    '#ifdef __EMSCRIPTEN__\n'
+    '\t/* The stage runs in this shell, and addfd() consumes whichever\n'
+    '\t * descriptor it is handed: it dup2()s that fd onto stdout and closes\n'
+    '\t * it.  Pass a copy, so the write end below is unambiguously ours to\n'
+    '\t * close once the stage has finished writing. */\n'
+    '\t{\n'
+    '\t    int stageout = movefd(dup(pipes[1]));\n'
+    '\n'
+    '\t    execcmd_exec(state, &eparams, input, stageout, how, 0, pipes[0]);\n'
+    '\t}\n'
+    '#else\n'
+    '\texeccmd_exec(state, &eparams, input, pipes[1], how, 0, pipes[0]);\n'
+    '#endif\n'
+    '\tzclose(pipes[1]);\n'
+)
+source = replace_once(source, OLD_PIPE, NEW_PIPE, 'the execpline2 pipe setup')
+
+# 4. execcmd_exec, first fork site: reached for every stage that is not the
+#    last one, before we know what kind of command it is.
+OLD_FORK1 = (
+'\tswitch (execcmd_fork(state, how, type, varspc, &filelist,\n'
+'\t\t\t     text, oautocont, close_if_forked)) {\n'
+'\tcase -1:\n'
+'\t    goto fatal;\n'
+'\tcase 0:\n'
+'\t    break;\n'
+'\tdefault:\n'
+'\t    return;\n'
+'\t}\n'
+'\tlast1 = forked = 1;\n'
+)
+NEW_FORK1 = (
+'\tswitch (execcmd_fork(state, how, type, varspc, &filelist,\n'
+'\t\t\t     text, oautocont, close_if_forked)) {\n'
+'\tcase -1:\n'
+'#ifdef __EMSCRIPTEN__\n'
+'\t    if (zsh_wasm_nofork) {\n'
+'\t\t/* Wasm: fork() is unavailable, so run this pipeline stage in the\n'
+'\t\t * current shell rather than a child.  addfd() below saves fds 0\n'
+'\t\t * and 1 and fixfds() restores them afterwards, so the pipeline\n'
+'\t\t * redirection does not escape this command.  Stages therefore run\n'
+'\t\t * one after another instead of concurrently, and share the\n'
+'\t\t * shell\'s state: assignments made in a stage are visible to the\n'
+'\t\t * rest of the script.  Both are the same trade-offs the command\n'
+'\t\t * substitution fallback accepts. */\n'
+'\t\tchild_unblock();\n'
+'\t\terrflag &= ~ERRFLAG_ERROR;\n'
+'\t\tlastval = old_lastval;\n'
+'\t\tbreak;\t\t/* forked stays 0: this shell runs the command */\n'
+'\t    }\n'
+'#endif\n'
+'\t    goto fatal;\n'
+'\tcase 0:\n'
+'\t    last1 = forked = 1;\n'
+'\t    break;\n'
+'\tdefault:\n'
+'\t    return;\n'
+'\t}\n'
+)
+source = replace_once(source, OLD_FORK1, NEW_FORK1, 'the early execcmd_fork call')
+
+# 5. execcmd_exec, second fork site: reached once the command has been
+#    identified.  Only a builtin or shell function can run in this shell; an
+#    external command needs fork()+exec() and still takes the error path.
+OLD_FORK2 = (
+'\t    switch (execcmd_fork(state, how, type, varspc, &filelist,\n'
+'\t\t\t\t text, oautocont, close_if_forked)) {\n'
+'\t    case -1:\n'
+'\t\tgoto fatal;\n'
+'\t    case 0:\n'
+'\t\tbreak;\n'
+'\t    default:\n'
+'\t\treturn;\n'
+'\t    }\n'
+'\t    forked = 1;\n'
+)
+NEW_FORK2 = (
+'\t    switch (execcmd_fork(state, how, type, varspc, &filelist,\n'
+'\t\t\t\t text, oautocont, close_if_forked)) {\n'
+'\t    case -1:\n'
+'#ifdef __EMSCRIPTEN__\n'
+'\t\tif (zsh_wasm_nofork && (is_cursh || type == WC_SUBSH)) {\n'
+'\t\t    /* See the matching fallback above.  Builtins, functions and\n'
+'\t\t     * ( ... ) all have an in-process form; a real external\n'
+'\t\t     * command needs fork()+exec() and still fails here. */\n'
+'\t\t    child_unblock();\n'
+'\t\t    errflag &= ~ERRFLAG_ERROR;\n'
+'\t\t    lastval = old_lastval;\n'
+'\t\t    break;\n'
+'\t\t}\n'
+'#endif\n'
+'\t\tgoto fatal;\n'
+'\t    case 0:\n'
+'\t\tforked = 1;\n'
+'\t\tbreak;\n'
+'\t    default:\n'
+'\t\treturn;\n'
+'\t    }\n'
+)
+source = replace_once(source, OLD_FORK2, NEW_FORK2, 'the late execcmd_fork call')
+
+with open(path, 'w') as source_file:
+    source_file.write(source)
+PYEOF
+    echo "    exec.c: patched for wasm pipelines"
+fi
+
 echo "==> configuring"
 if [[ -f "$BUILD/Makefile" ]]; then
     echo "    already configured (delete build-zsh/ to reconfigure from scratch)"

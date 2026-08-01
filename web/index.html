@@ -369,6 +369,14 @@
     </div>
 
     <div class="example">
+        <div class="example-header">Pipelines</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-pipe"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-pipe"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
         <div class="example-header">Here Documents</div>
         <div class="example-body">
             <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-here"></pre></div>
@@ -632,6 +640,41 @@ for f in ^*.log; echo "  $f"
 
 echo "--- *(.)  files only"
 for f in *(.); echo "  $f"
+</script>
+
+<script type="text/zsh" data-id="pipe" data-stdout="#out-pipe" data-stderr="#out-pipe">
+# Pipelines work, even though WebAssembly has no fork(): zsh runs each stage in
+# this one shell, in order, passing its output on through a temp file.
+
+echo "=== sort | uniq -c | sort -rn ==="
+printf 'pear
+apple
+pear
+fig
+apple
+pear
+' | sort | uniq -c | sort -rn
+
+echo "=== into a compiled builtin ==="
+echo 'scale=4; 22/7' | bc
+seq 10 | awk '{ total += $1 } END { print "sum:", total }'
+echo 'hello world' | sed 's/world/pipelines/'
+
+echo "=== stage by stage ==="
+printf 'alpha
+beta
+gamma
+delta
+' | grep a | tr 'a-z' 'A-Z' | head -3
+
+echo "=== a pipeline is one command, so this counts words ==="
+{ repeat 3 echo 'one two three' } | wc -w
+
+# The catch: nothing streams and nothing is isolated. Every stage runs to
+# completion before the next starts, and they all share this shell — so an
+# assignment in a stage outlives it:
+echo 42 | read answer
+echo "answer is still $answer"
 </script>
 
 <script type="text/zsh" data-id="here" data-stdout="#out-here" data-stderr="#out-here">

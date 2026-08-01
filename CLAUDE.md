@@ -35,6 +35,9 @@ Key Files
 | File                                 | Purpose                                                                          |
 | ------------------------------------ | -------------------------------------------------------------------------------- |
 | `bin/build`                          | Main Emscripten build script; outputs `web/zsh.js` + `web/zsh.wasm`              |
+| `bin/setup`                          | One-time setup; also holds the `Src/exec.c` patches that make `$( )` and pipelines work without `fork()` |
+| `bin/run-script`                      | Node CLI harness: run a script against a build without a browser (dev aid)      |
+| `embed/embed_stdin.h`                | Shared stdin reset used by the compiled sed/awk/bc builtins                     |
 | `web/zsh.js`                         | Emscripten loader (build output, committed to git)                               |
 | `web/zsh.wasm`                       | Compiled Zsh 5.9 binary (build output, committed)                                |
 | `web/zsh-runtime.js`                 | JS wrapper: `runZshScript(src, opts)` → `{ stdout, stderr }`                     |
@@ -88,6 +91,11 @@ to every script automatically. It provides: `touch`, `cat`, `ls`, `cp`, `mv`,
 via `bin/build --with-sed --with-awk --with-bc`. The published npm package
 includes all three.
 
+Because they are builtins rather than processes, every call in a script shares
+one set of globals and one `stdin` FILE. Anything a tool leaves behind must be
+reset per invocation — see `embed/embed_stdin.h` and the reset blocks at the top
+of `awk_main()` / `bc_embed_main()` / `sed_main()`.
+
 ---
 
 Building
@@ -123,10 +131,13 @@ Short version:
 Known Limitations
 -----------------
 
-- **No `fork()`** — pipes between external processes don't work. Use temp files
-  or here strings as workarounds. The `|` operator between two *shims* works only
-  if both sides are pure zsh functions (no subshell needed).
-- **No subshell isolation** — `(cmd)` is rewritten to `{ cmd }`, so mutations
+- **No `fork()`** — `Src/exec.c` is patched (see `bin/setup`) so that both `$( )`
+  and pipeline stages run in the current shell instead of a child. Pipelines
+  therefore work, but sequentially: each stage runs to completion, writing to a
+  temp file the next stage reads. Nothing streams, and nothing is isolated —
+  an assignment in a stage outlives it, and `exit` in a stage ends the script.
+  `cmd &` runs `cmd` synchronously. Process substitution `<(cmd)` still fails.
+- **No subshell isolation** — the body of `(cmd)` runs in this shell, so mutations
   inside a subshell leak to the outer scope.
 - **Synchronous WASM** — no `sleep`, no real concurrency. `sleep` is a no-op shim.
 - **MEMFS** — the virtual filesystem is in-memory and reset on each `runZshScript`

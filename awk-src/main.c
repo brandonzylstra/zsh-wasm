@@ -155,16 +155,21 @@ int awk_main(int argc, char *argv[])
 	 *  - beginloc/endloc accumulate BEGIN/END actions (each parse appends), so
 	 *    without this a second program re-runs the first program's BEGIN/END.
 	 *  - argno advances as input files are consumed and is never rewound, so a
-	 *    second file-reading program would start past ARGC and read nothing. */
+	 *    second file-reading program would start past ARGC and read nothing.
+	 *  - getrec() calls initgetrec() only on its first call ever, and that is
+	 *    what points a program with no file arguments at stdin; without the
+	 *    reset a second `... | awk ...` reads nothing at all. */
 	{
 		extern Node *beginloc, *endloc;
 		extern int argno;
 		extern FILE *infile;
 		extern bool innew;
+		extern void resetgetrec(void);
 		beginloc = endloc = NULL;
 		argno = 1;
 		infile = NULL;
 		innew = false;
+		resetgetrec();
 	}
 
 	setlocale(LC_CTYPE, "");

@@ -206,6 +206,7 @@ MDH
         -I"$ROOT/zsh-5.9/Src/Modules" \
         -I"$STUB/include" \
         -I"$SED_SRC" \
+        -I"$ROOT/embed" \
         -DHAVE_CONFIG_H
 
     SED_CFLAGS="-I$SED_SRC"
@@ -335,6 +336,7 @@ MDH
         -I"$ROOT/zsh-5.9/Src/Modules" \
         -I"$STUB/include" \
         -I"$AWK_SRC" \
+        -I"$ROOT/embed" \
         -DHAVE_CONFIG_H
 
     AWK_CFLAGS="-I$AWK_SRC"
@@ -493,6 +495,7 @@ MDH
         -I"$ROOT/zsh-5.9/Src/Modules" \
         -I"$STUB/include" \
         -I"$BC_SRC" \
+        -I"$ROOT/embed" \
         -DHAVE_CONFIG_H
 
     BC_CFLAGS="-I$BC_SRC $BC_DEFINES"

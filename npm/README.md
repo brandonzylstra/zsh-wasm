@@ -88,13 +88,14 @@ Zsh builtins work as-is. The following external commands are shimmed:
 | `basename`| suffix arg |
 | `dirname` | — |
 | `base64`  | `-d`/`--decode` |
-| `bc` / `dc` | arbitrary-precision math (via `zsh/mathfunc` and `<<<` input) |
+| `bc` / `dc` | arbitrary-precision math (compiled in; reads pipes, `<<<` and heredocs) |
 
 Well-known unavailable commands (curl, git, python3, docker, etc.) emit a helpful stderr message and return exit code 127 without aborting the script.
 
 ## Known limitations
 
-- **No fork** — background jobs (`cmd &`), process substitution (`<(cmd)`), and unsupported external binaries all require `fork()`, which is not available in WebAssembly.
+- **No fork** — process substitution (`<(cmd)`) and unsupported external binaries require `fork()`, which is not available in WebAssembly. `cmd &` runs `cmd` synchronously instead of in the background.
+- **Pipelines run one stage at a time** — `a | b | c` works, but because there are no processes to run in parallel, each stage runs to completion before the next starts, and all of them share this shell. So a pipeline never streams (`cmd | head -1` still runs `cmd` to the end), an assignment in a stage outlives it (`echo x | read value` leaves `value` set), and `exit` in a stage ends the whole script.
 - **`$(...)` runs in-process** — no true subshell isolation; variable assignments inside `$(...)` leak to the parent scope.
 - **`sleep` needs cross-origin isolation for real blocking** — `SharedArrayBuffer` (required for `Atomics.wait`) is only available when the page is cross-origin isolated. Without it, `sleep` is a no-op unless you pass `busySleepFallback: true` to `RunOptions`, which uses a CPU-spinning busy-wait instead. See [Cross-origin isolation](#cross-origin-isolation) below.
 - **`TZ` supports UTC offsets only** — `TZ=UTC`, `TZ=UTC±H`, `TZ=UTC±H:MM`, and `TZ=±HH:MM` work. Named timezones (`TZ=America/New_York`) are not supported (no tzdata); `date` falls back to browser local time with a stderr warning.

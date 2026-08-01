@@ -140,6 +140,11 @@ void savefs(void)
 
 static bool firsttime = true;
 
+void resetgetrec(void)	/* zsh-wasm: forget that input has already been set up */
+{
+	firsttime = true;
+}
+
 int getrec(char **pbuf, int *pbufsize, bool isrecord)	/* get next input record */
 {			/* note: cares whether buf == record */
 	int c;

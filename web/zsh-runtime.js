@@ -973,149 +973,6 @@ man()     { _zw_stub 'man pages are not available in zsh-wasm.' }
 ping()    { _zw_stub 'no network access in zsh-wasm.' }
 `;
 
-// Detect pipeline operator (space | space, excluding || and |& and |>).
-function hasPipelineOp(src) {
-    return / \| /.test(src);
-}
-
-// Looks ahead from just after a top-level `|` to decide whether it is a
-// case-pattern alternation (e.g. `python|py)` or `a|b|c)`) rather than a
-// pipeline operator. A pattern alternation reaches an unmatched `)` (the arm
-// opener) before any command terminator; a real pipeline does not. Other `|`
-// characters are neutral here because patterns may chain several alternates.
-function pipeIsCasePattern(src, from) {
-    let depth = 0, inSQ = false, inDQ = false;
-    for (let j = from; j < src.length; j++) {
-        const c = src[j];
-        if (inSQ) { if (c === "'") inSQ = false; continue; }
-        if (inDQ) { if (c === '"') inDQ = false; continue; }
-        if (c === '\\') { j++; continue; }
-        if (c === "'") { inSQ = true; continue; }
-        if (c === '"') { inDQ = true; continue; }
-        if (c === '(') { depth++; continue; }
-        if (c === ')') { if (depth === 0) return true; depth--; continue; }
-        if (depth === 0 && (c === ';' || c === '\n' || c === '&')) return false;
-    }
-    return false;
-}
-
-// Transforms `a | b | c` pipelines into sequential temp-file chaining so they work
-// without fork(): `{ a } >/tmp/_zpipe_0; { b } </tmp/_zpipe_0 >/tmp/_zpipe_1; { c } </tmp/_zpipe_1`
-//
-// Tracks quote/bracket depth to skip pipes inside strings and subexpressions.
-// Known limit: pipes inside heredoc content are not detected as non-pipes (rare
-// in piping contexts). Case-pattern alternates (`a|b)`) and glob qualifiers
-// (`*(.)`) are recognized and left untouched.
-//
-// fork option: 'simulate' (default, uses this fn) | 'off' (no-op, original behavior)
-//              Future: 'native' for a --with-threads wasm build with real fork().
-function simulatePipes(src) {
-    const out = [];
-    let i = 0, n = src.length;
-    let inSQ = false, inDQ = false, depth = 0, pipeCount = 0;
-    let buf = [], pipePos = []; // chars for current pipeline group; | offsets within buf
-
-    const flush = (sep) => {
-        const s = buf.join('');
-        if (!pipePos.length) {
-            out.push(s);
-        } else {
-            const segs = [];
-            let prev = 0;
-            for (const p of pipePos) { segs.push(s.slice(prev, p).trim()); prev = p + 1; }
-            segs.push(s.slice(prev).trim());
-            const parts = [];
-            for (let k = 0; k < segs.length; k++) {
-                const cur   = `/tmp/_zpipe_${pipeCount}`;
-                const prev2 = `/tmp/_zpipe_${pipeCount - 1}`;
-                if      (k === segs.length - 1) parts.push(`{ ${segs[k]} } <${prev2}`);
-                else if (k === 0)               { parts.push(`{ ${segs[k]} } >${cur}`);             pipeCount++; }
-                else                            { parts.push(`{ ${segs[k]} } <${prev2} >${cur}`);  pipeCount++; }
-            }
-            out.push(parts.join('; '));
-        }
-        if (sep) out.push(sep);
-        buf = []; pipePos = [];
-    };
-
-    while (i < n) {
-        const c = src[i];
-        if (inSQ) { buf.push(c); if (c === "'") inSQ = false; i++; continue; }
-        if (c === '\\') { buf.push(c, src[i+1] ?? ''); i += 2; continue; }
-        if (inDQ) { buf.push(c); if (c === '"') inDQ = false; i++; continue; }
-        if (c === "'") { inSQ = true;  buf.push(c); i++; continue; }
-        if (c === '"') { inDQ = true;  buf.push(c); i++; continue; }
-
-        // Depth openers/closers — check two-char sequences first.
-        if (c === '[' && src[i+1] === '[')               { depth++;              buf.push('[','['); i += 2; continue; }
-        if (c === ']' && src[i+1] === ']' && depth > 0)  { depth--;              buf.push(']',']'); i += 2; continue; }
-        if (c === '$' && src[i+1] === '(')               { depth++;              buf.push('$','('); i += 2; continue; }
-        if (c === '{')                                   { depth++;              buf.push(c);       i++;    continue; }
-        if (c === '(' && depth > 0)                      { depth++;              buf.push(c);       i++;    continue; }
-        if ((c === ')' || c === '}') && depth > 0)       { depth--;              buf.push(c);       i++;    continue; }
-        if (depth > 0) { buf.push(c); i++; continue; }
-
-        // Top-level `(` — subshell or arithmetic `((`.
-        if (c === '(') {
-            // `((expr))` arithmetic — track as depth, no subshell transform.
-            if (src[i+1] === '(') { depth++; buf.push(c); i++; continue; }
-
-            // Determine if this `(` opens a subshell. A subshell `(` sits at a
-            // command boundary: the start of the script, right after a separator
-            // (`;`, `|`, `&`, `(`, `{`), or after a shell keyword. If it instead
-            // follows a word (function call `foo(`), an `=` (array assign `a=(`),
-            // or a glob/pattern char with no space (glob qualifier `*(.)`), it is
-            // NOT a subshell and must be left untouched.
-            const prevStr  = buf.join('').trimEnd();
-            const prevWord = (prevStr.match(/(\w+)$/) ?? ['',''])[1];
-            const isArrayAssign = prevStr.endsWith('='); // catches `a=(` and `a+=(`
-            const lastChar = prevStr.slice(-1);
-            const atCommandBoundary = prevStr === '' || ';|&({'.includes(lastChar);
-            const shellKw = new Set(['if','then','else','elif','fi','do','done',
-                                     'while','until','for','case','esac','in',
-                                     'select','time','!','function']);
-            if (!isArrayAssign && (atCommandBoundary || shellKw.has(prevWord))) {
-                // Subshell: collect content up to matching `)`, recursively transform, emit `{ ... }`.
-                i++; // skip opening `(`
-                const ss = i;
-                let iDepth = 1, iSQ2 = false, iDQ2 = false;
-                while (i < n) {
-                    const ic = src[i];
-                    if (iSQ2) { if (ic === "'") iSQ2 = false; i++; continue; }
-                    if (ic === '\\') { i += 2; continue; }
-                    if (iDQ2) { if (ic === '"') iDQ2 = false; i++; continue; }
-                    if (ic === "'") { iSQ2 = true;  i++; continue; }
-                    if (ic === '"') { iDQ2 = true;  i++; continue; }
-                    if (ic === '(' || ic === '{') { iDepth++; i++; continue; }
-                    if (ic === ')' || ic === '}') { iDepth--; i++; if (!iDepth) break; continue; }
-                    i++;
-                }
-                const subContent = src.slice(ss, i - 1);
-                for (const ch of `{ ${simulatePipes(subContent)} }`) buf.push(ch);
-                continue;
-            }
-            // Not a subshell (e.g. function call `foo(...)`): treat as normal depth opener.
-            depth++; buf.push(c); i++; continue;
-        }
-
-        // Top-level pipe / boundary detection.
-        if (c === '|') {
-            const nx = src[i+1];
-            if (nx === '|') { flush('||'); i += 2; continue; }
-            if (nx === '&') { flush('|&'); i += 2; continue; }
-            // A case-pattern alternation (`foo|bar)`) is not a pipeline operator.
-            if (pipeIsCasePattern(src, i + 1)) { buf.push(c); i++; continue; }
-            pipePos.push(buf.length); buf.push(c); i++; continue;
-        }
-        if (c === ';' || c === '\n')       { flush(c);    i++;    continue; }
-        if (c === '&' && src[i+1] === '&') { flush('&&'); i += 2; continue; }
-        if (c === '&')                     { flush(c);    i++;    continue; }
-        buf.push(c); i++;
-    }
-    flush('');
-    return out.join('');
-}
-
 // Pool of pre-warmed Web Workers. Each worker holds a fully initialized wasm
 // module ready to run a script immediately. After each run the worker begins
 // pre-initializing the next module, overlapping init with the caller's read time.
@@ -1143,14 +1000,7 @@ class WorkerPool {
                 const job = w._job;
                 w._job = null;
                 if (w._timer) { clearTimeout(w._timer); w._timer = null; }
-                let { stdout, stderr, exitCode } = data;
-                // Only inject the helpful pipe diagnostic when simulation is off and
-                // the script had a pipeline but produced no output at all.
-                if (!stdout && !stderr && job.fork === 'off' && hasPipelineOp(job.src)) {
-                    stderr = 'zsh-wasm: pipes require fork(), which is not available in WebAssembly.\n' +
-                             '  Use here-strings or heredocs instead of pipelines.\n' +
-                             "  Example: bc <<< '1+1'  (not: echo '1+1' | bc)";
-                }
+                const { stdout, stderr, exitCode } = data;
                 job.resolve({ stdout, stderr, exitCode });
                 // Worker will send 'ready' once its next pre-init completes.
             }
@@ -1175,7 +1025,6 @@ class WorkerPool {
 
     #dispatch(worker, job) {
         worker._job = job;
-        const src = job.fork !== 'off' ? simulatePipes(job.src) : job.src;
         const localTzOffSec = -new Date().getTimezoneOffset() * 60;
         worker._timer = setTimeout(() => {
             const stuck = worker._job;
@@ -1184,13 +1033,12 @@ class WorkerPool {
             this.#retire(worker);
             if (stuck) stuck.reject(new Error(
                 `zsh-wasm: script timed out after ${Math.round(job.timeoutMs / 1000)}s — ` +
-                'likely an infinite loop or a command blocking on input that never arrives ' +
-                '(some compiled tools such as bc can only be invoked once per run). ' +
+                'likely an infinite loop, or a command waiting on input that never arrives. ' +
                 'The worker was restarted.'));
         }, job.timeoutMs);
         worker.postMessage({
             type: 'run',
-            src: `_ZW_LOCAL_TZ_SECS=${localTzOffSec}\n` + BUILTINS_PREAMBLE + src + '\n',
+            src: `_ZW_LOCAL_TZ_SECS=${localTzOffSec}\n` + BUILTINS_PREAMBLE + job.src + '\n',
             fs: job.fs ?? ZSH_FS,
             idbfsMount: IDBFS_MOUNT,
             stdin: job.stdin ?? null,
@@ -1198,9 +1046,9 @@ class WorkerPool {
         });
     }
 
-    run(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false, timeoutMs = 30000 } = {}) {
+    run(src, { stdin = null, fs = null, busySleepFallback = false, timeoutMs = 30000 } = {}) {
         return new Promise((resolve, reject) => {
-            const job = { src, stdin, fs, fork, busySleepFallback, timeoutMs, resolve, reject };
+            const job = { src, stdin, fs, busySleepFallback, timeoutMs, resolve, reject };
             if (this.#ready.length > 0) {
                 this.#dispatch(this.#ready.shift(), job);
             } else {
@@ -1221,9 +1069,9 @@ class WorkerPool {
 // Lazy default pool — created on first runZshScript() call.
 let _defaultPool = null;
 
-export function runZshScript(src, { stdin = null, fs = null, fork = 'simulate', busySleepFallback = false, timeoutMs = 30000 } = {}) {
+export function runZshScript(src, { stdin = null, fs = null, busySleepFallback = false, timeoutMs = 30000 } = {}) {
     if (!_defaultPool) _defaultPool = new WorkerPool(1);
-    return _defaultPool.run(src, { stdin, fs, fork, busySleepFallback, timeoutMs });
+    return _defaultPool.run(src, { stdin, fs, busySleepFallback, timeoutMs });
 }
 
 /** Create a pool of pre-warmed workers. Call pool.run(src, opts) and pool.shutdown(). */

@@ -416,14 +416,79 @@ allocation for large file diffs, which is not a concern for typical script use.
 
 ---
 
-6. Pipe simulation (long-term research)
----------------------------------------
+6. Pipelines without fork() (done)
+----------------------------------
 
-**Status:** Research / uncertain. The single biggest real-world limitation.
-`echo hello | grep hello` fails because both sides of `|` need separate
-processes, and `fork()` is not available.
+**Status:** Complete, via Option E below. `echo hello | grep hello` works, and
+so does `echo '1+1' | bc`. `simulatePipes()` has been deleted from
+`web/zsh-runtime.js` along with the `fork` run option (kept in `index.d.ts` as
+deprecated and ignored so existing TypeScript callers still compile).
 
-**Approaches to investigate:**
+What was done:
+
+- `bin/setup` now patches four more places in `Src/exec.c` under
+  `#ifdef __EMSCRIPTEN__` (the two `$( )` patches were already there):
+  1. `zfork()` records `zsh_wasm_nofork` when `fork()` fails with `ENOSYS`, so
+     the fallbacks below fire only for a genuinely missing `fork()`.
+  2. Both `execcmd_fork()` call sites in `execcmd_exec()` fall back to running
+     the command in this shell instead of taking the fatal error path. The
+     existing `addfd()`/`fixfds()` save-and-restore already handles fds 0 and 1,
+     so the pipeline redirection does not escape the command. The late call site
+     only does this for something with an in-process form (a builtin, function
+     or `( )`); a real external command still fails.
+  3. `execpline2()` links the stages with a temp file instead of a pipe.
+- **A temp file, not a pipe.** Emscripten's `pipe()` never reports end-of-file:
+  a drained pipe returns `EAGAIN` even after the write end is closed
+  (see `libpipefs.js` — `read()` throws `EAGAIN` whenever the buffer is empty,
+  and `close()` only decrements a refcount). A stage reading a finished pipe
+  would hang or error instead of seeing EOF. A temp file is also unbounded,
+  which removes the pipe-buffer deadlock the `$( )` patch has to warn about.
+- **Compiled tools had to be made re-entrant on stdin** (see 6b below).
+
+**Accepted trade-offs**, all documented in the README:
+
+- No isolation between stages: `echo x | read value` leaves `value` set in the
+  script, and `exit` in a stage ends the whole script.
+- No streaming: each stage finishes before the next starts, so `cmd | head -1`
+  still runs `cmd` to completion.
+- `pipestatus` reflects only the stages that produce a real job entry.
+- `cmd &` no longer aborts the script; it runs `cmd` synchronously (an
+  improvement on the previous behavior, but still not backgrounding).
+
+Tests: 20 pipeline cases in `web/test.html` (`pipe-*`), covering multi-stage
+chains, `|&`, exit status, `while read`, pipelines inside `$( )`/functions/
+subshells, output larger than any pipe buffer, and repeated invocations of the
+compiled sed/awk/bc from a pipe.
+
+---
+
+6b. Compiled tools reading stdin more than once (done)
+------------------------------------------------------
+
+**Status:** Complete. Found while testing pipelines, but it was a pre-existing
+bug: `sed s/a/b/ <<< a; sed s/c/d/ <<< c` printed only `b`.
+
+`sed`, `awk` and `bc` are builtins, not processes, so they share one `stdin`
+FILE for the life of the wasm module even though fd 0 is a different file on
+every call. The end-of-file flag left by the first call made the second read
+nothing at all — `getc()` reported EOF from the flag without ever touching the
+new descriptor.
+
+- `embed/embed_stdin.h` — `reset_embedded_stdin()`, called at the top of each
+  builtin: `fflush(stdin)` to drop stale buffered input, `clearerr(stdin)` to
+  drop the sticky EOF/error flags.
+- awk needed one more reset: `getrec()` calls `initgetrec()` only on the very
+  first call ever, and that is what points a program with no file arguments at
+  stdin. `lib.c` now exports `resetgetrec()` and `awk_main()` calls it.
+
+Tests: `pipe-sed-twice`, `pipe-awk-twice`, `pipe-bc-twice`.
+
+---
+
+6c. Historical: approaches considered
+--------------------------------------
+
+**Approaches investigated** (kept for the record; Option E is what shipped):
 
 ### Option A: Emscripten `pipe()` + async workers
 
@@ -444,7 +509,7 @@ processes, and `fork()` is not available.
   sending to zsh
 - Fragile (parsing shell is hard); only practical for simple linear pipelines
 
-### Option E: Patch `execpline2` to run pipeline stages in-process ⭐ THE REAL FIX
+### Option E: Patch `execpline2` to run pipeline stages in-process ⭐ THIS IS WHAT SHIPPED
 
 **This is the option that should have been on this list from the start, and it is what
 Option C is a workaround for.** `bin/setup` already does exactly this for command
@@ -474,7 +539,29 @@ Trade-offs to accept up front, the same ones the `$( )` patch documents in its o
 variable assignments in a stage leak to the parent, and output larger than the pipe buffer
 may deadlock. Both were judged acceptable for the script workloads this targets.
 
-### Replace the coreutils shims with compiled binaries ⭐ THE OTHER REAL FIX
+### Option D: Accept the limitation; document workarounds
+
+Superseded by Option E. Kept for the record; this was the fallback if patching
+`execpline2` had not worked out.
+
+```sh
+# Instead of:
+echo hello | grep hello
+
+# Use temp file (works in wasm):
+echo hello > /tmp/t; grep hello /tmp/t
+
+# Or process substitution with a loop:
+lines=("${(@f)$(echo hello)}"); for l in $lines; do [[ $l =~ hello ]] && echo $l; done
+```
+
+---
+
+6d. Replace the coreutils shims with compiled binaries
+-------------------------------------------------------
+
+**Status:** Open. The remaining half of the "stop working around no-fork and
+fix it properly" pair — pipelines were the other half and are now done (6 above).
 
 `BUILTINS_PREAMBLE` in `web/zsh-runtime.js` is ~27 KB of zsh functions reimplementing 56
 coreutils commands. It is a workaround, and it behaves like one — four real bugs were found
@@ -493,25 +580,12 @@ one dependency, one build step, and a far larger command surface for the same ef
 Until then the shims stay, and the note in 1d about `wc`'s unpadded output being a
 deliberate project convention still applies.
 
-### Option D: Accept the limitation; document workarounds
-
-The most pragmatic short-term answer. Provide a guide in the README:
-
-```sh
-# Instead of:
-echo hello | grep hello
-
-# Use temp file (works in wasm):
-echo hello > /tmp/t; grep hello /tmp/t
-
-# Or process substitution with a loop:
-lines=("${(@f)$(echo hello)}"); for l in $lines; do [[ $l =~ hello ]] && echo $l; done
-```
-
-**Checklist (for Option D — documentation path):**
-- [ ] Add "Pipe workarounds" section to README Known Limitations
-- [ ] Add wasm-specific examples that avoid pipes
-- [ ] Track Option A as a future research spike
+**Checklist:**
+- [ ] Evaluate BusyBox/toybox as one bundle vs. individual ports
+- [ ] Port the first command (`grep` is the highest-value — see item 2) and
+      confirm the module pattern still holds now that stdin re-entrancy is
+      handled by `embed/embed_stdin.h`
+- [ ] Delete each shim from `BUILTINS_PREAMBLE` as its compiled version lands
 
 ---
 
@@ -620,10 +694,8 @@ than a bloat-or-skip binary decision.
 **Checklist:**
 - [ ] Add examples showcasing sed, awk, grep (once compiled)
 - [ ] Add an example using `bc` for floating-point math
-- [x] Add a "what doesn't work" message for pipes/subshells — `runZshScript` now detects
-      ` | ` patterns and, when the script produces zero output, injects a helpful stderr
-      message: "zsh-wasm: pipes require fork(), which is not available in WebAssembly."
-      Test `pipe-helpful-error` verifies this. (Still TODO: visible notice in demo UI.)
+- [x] ~~Add a "what doesn't work" message for pipes~~ — removed along with
+      `simulatePipes()`: pipes work now, so the diagnostic and its test are gone.
 - [x] Add syntax highlighting for zsh code in the example editor
 
 ---
@@ -640,7 +712,8 @@ Priority Order Summary
 | 3   | Compiled bc               | 2–3 days | no                | medium                     |
 | 4   | find shim                 | 2 hr     | no                | medium                     |
 | 5   | Compiled diff             | 1–2 days | no                | low                        |
-| 6   | Pipe simulation           | weeks    | yes               | very high                  |
+| 6   | Pipelines without fork()  | done     | yes               | very high                  |
+| 6d  | Compiled coreutils        | weeks    | no                | high                       |
 | 7   | idbfs testing             | 2 hr     | no                | medium                     |
 | 8   | Module install-on-demand  | weeks    | no                | high (prerequisite for jq) |
 | 9   | jq                        | weeks    | no                | high (after #8)            |

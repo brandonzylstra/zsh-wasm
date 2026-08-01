@@ -12,6 +12,7 @@
 
 #include "sed.mdh"
 #include "sed_embed.h"
+#include "embed_stdin.h"
 
 /**/
 static int
@@ -29,6 +30,8 @@ bin_sed(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
     for (int i = 0; i < n; i++)
         argv[i + 1] = args[i];
     argv[n + 1] = NULL;
+
+    reset_embedded_stdin();
 
     /* sed_main always exits via sed_do_exit() → longjmp; catch it here */
     if (setjmp(sed_exit_jmp))
