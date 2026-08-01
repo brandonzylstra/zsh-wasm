@@ -1,0 +1,93 @@
+#!/usr/bin/env node
+// Runs a zsh script against a built zsh.js/zsh.wasm pair from the command line.
+// Development aid: lets you exercise the wasm build without a browser or a
+// Playwright run.  The browser runtime (web/zsh-runtime.js) is a separate path;
+// this harness deliberately runs the *raw* interpreter with no preamble unless
+// --preamble is given, so interpreter-level behavior can be tested in isolation.
+//
+// Usage:
+//   bin/run-script 'echo hello | cat'
+//   bin/run-script --file script.zsh
+//   bin/run-script --preamble 'seq 5 | wc -l'      # with BUILTINS_PREAMBLE
+//   bin/run-script --module npm/zsh.js 'echo hi'   # test a different build
+
+const fs   = require('fs');
+const path = require('path');
+
+const root = path.resolve(__dirname, '..');
+
+let modulePath  = path.join(root, 'web/zsh.js');
+let withPreamble = false;
+let scriptSource = null;
+let stdinText    = null;
+
+const argv = process.argv.slice(2);
+while (argv.length) {
+    const argument = argv.shift();
+    if (argument === '--module')        modulePath = path.resolve(argv.shift());
+    else if (argument === '--preamble') withPreamble = true;
+    else if (argument === '--file')     scriptSource = fs.readFileSync(argv.shift(), 'utf8');
+    else if (argument === '--stdin')    stdinText = argv.shift();
+    else                                scriptSource = argument;
+}
+
+if (scriptSource == null) {
+    console.error('usage: bin/run-script [--module FILE] [--preamble] [--stdin TEXT] SCRIPT | --file FILE');
+    process.exit(2);
+}
+
+if (withPreamble) {
+    const runtimeSource = fs.readFileSync(path.join(root, 'web/zsh-runtime.js'), 'utf8');
+    const match = runtimeSource.match(/const BUILTINS_PREAMBLE = `([\s\S]*?)\n`;\n/);
+    if (!match) {
+        console.error('could not extract BUILTINS_PREAMBLE from web/zsh-runtime.js');
+        process.exit(2);
+    }
+    // The preamble is a JS template literal; un-escape the sequences that
+    // matter inside it (\` and \\ and ${).
+    const preamble = match[1]
+        .replace(/\\`/g, '`')
+        .replace(/\\\$/g, '$')
+        .replace(/\\\\/g, '\\');
+    scriptSource = '_ZW_LOCAL_TZ_SECS=0\n' + preamble + '\n' + scriptSource;
+}
+
+const createZshModule = require(modulePath);
+
+const out = [];
+const err = [];
+
+let stdinBytes = null;
+let stdinPosition = 0;
+if (stdinText != null) {
+    stdinBytes = Buffer.from(stdinText.endsWith('\n') ? stdinText : stdinText + '\n');
+}
+
+createZshModule({
+    noInitialRun: true,
+    // argv[0] becomes the shell name; zsh turns on RESTRICTED for any name
+    // starting with "r", which would otherwise happen under Node because
+    // Emscripten defaults thisProgram to process.argv[1] (bin/run-script).
+    thisProgram: 'zsh',
+    print:    text => out.push(text),
+    printErr: text => {
+        if (!text.startsWith('warning: unsupported syscall:') &&
+            !text.startsWith('program exited (with status:')) err.push(text);
+    },
+    stdin: () => (stdinBytes && stdinPosition < stdinBytes.length)
+        ? stdinBytes[stdinPosition++]
+        : null,
+}).then(module => {
+    module.FS.writeFile('/script', scriptSource);
+    let exitCode = 0;
+    try {
+        const returned = module.callMain(['/script']);
+        if (typeof returned === 'number') exitCode = returned;
+    } catch (error) {
+        if (error && typeof error.status === 'number') exitCode = error.status;
+        else throw error;
+    }
+    if (out.length) process.stdout.write(out.join('\n') + '\n');
+    if (err.length) process.stderr.write('[stderr] ' + err.join('\n[stderr] ') + '\n');
+    process.stdout.write(`[exit ${exitCode}]\n`);
+});
