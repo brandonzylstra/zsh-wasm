@@ -467,7 +467,7 @@ without `fork()`.
 | `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
 | `rm`      | `-f` `-r`/`-rf`     | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
 | `ln`      | `-s`, `-f`          | symlinks via `zf_ln -s`; hard links are not supported in MEMFS |
-| `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1. Richer than sbase's grep, which has no `-r`, `-o`, `-m` or context lines |
+| `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1. Richer than sbase's grep, which has no `-r`, `-o`, `-m` or context lines. Note patterns are always ERE here, where real grep is BRE without `-E`: `grep 'a|b'` matches either, and `grep 'a+'` is a quantifier |
 | `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
 | `xargs`   | `-I STR`, `-n N`    | runs the command in this shell — a compiled xargs would need `exec()` |
 | `env`     | `VAR=val`, `-u VAR` | same reason as xargs; `-i` (clear env) silently ignored |

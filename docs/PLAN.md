@@ -824,7 +824,7 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
 
 | Command | Why the shim stays |
 | --- | --- |
-| `grep` | sbase's grep has no `-r`, `-o`, `-m` or `-A`/`-B`/`-C`. Ours does. Porting it would *lose* capability |
+| `grep` | see below — porting it would lose capability *and* change pattern syntax |
 | `find` | 1103 lines and 105 statics for a glob the shim already does; `-exec` needs `fork()` anyway |
 | `xargs`, `env` | both run a command, which without `exec()` only the shell can do |
 | `which` | ours knows about shell functions and builtins; a PATH search does not |
@@ -832,6 +832,40 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
 | `sleep` | ours blocks for real via `Atomics.wait()` in the worker |
 | `cp`, `mv`, `rm`, `ln` | one-line delegations to `zsh/files` builtins; nothing to gain |
 | `realpath`, `base64` | sbase has neither |
+
+### grep: evaluated, not ported (2026-08-01)
+
+Two reasons, the second of them a surprise.
+
+**It would lose flags.** sbase's grep has `-E -F -H -c -h -i -l -n -q -s -v -w
+-x -e -f`. The shim has `-i -v -n -c -r -R -l -o -q -w -e -m -A -B -C -H -h`.
+Trading `-r`, `-o`, `-m` and the context flags for `-F`, `-x`, `-s` and `-f` is
+not obviously a gain, and adding the missing four back would be the largest
+patch in `sbase-src/PATCHES.md` by some distance.
+
+**It would change what patterns mean.** The shim matches with zsh's `=~`, which
+is always ERE. Real grep — and sbase's — is BRE unless given `-E`:
+
+```
+grep 'apple|cherry' file   # real grep: no match (literal '|'). shim: matches both
+grep 'a+' file             # real grep: no match (literal '+'). shim: matches
+```
+
+Five tests in `web/test.html` (`grep-alternation`, `grep-plus`, `grep-optional`,
+`grep-brace`, `grep-wo`) use ERE syntax with no `-E`, so the convention is
+already baked in, and any CodeCompared example doing the same would change
+meaning under a POSIX-correct grep.
+
+That makes this a product decision rather than an engineering one, and worth
+taking deliberately: either keep ERE-by-default and stay divergent from every
+real grep, or switch to BRE and accept that existing examples change. Both are
+defensible; neither should happen as a side effect of a port. Until then the
+shim stays, and the divergence is now at least documented rather than
+accidental.
+
+Note the regex engine is *not* the reason to port: `=~` goes through
+`zsh/regex`, which is musl's POSIX regex — the same engine sbase's grep would
+use. Only the dialect differs.
 
 **Checklist:**
 - [x] Evaluate BusyBox/toybox as one bundle vs. individual ports (BusyBox ruled
@@ -846,8 +880,9 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
       wrong: `-a` now lists `.` and `..` (that was `-A` behavior), `-R` prints a
       section per directory, and `-l` finally shows real file types and symlink
       targets rather than a leading `?`.
-- [ ] Consider patching sbase's grep up to the shim's feature set, or leave
-      item 2's OpenBSD-grep plan as the path for a compiled grep
+- [x] Decided against porting grep — see below. Item 2's OpenBSD-grep plan
+      remains the path if a compiled grep is wanted, and it inherits the same
+      BRE/ERE question.
 
 ---
 
