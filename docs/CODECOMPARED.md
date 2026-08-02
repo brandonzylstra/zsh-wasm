@@ -28,21 +28,21 @@ URLs exist and permanent caching is unsafe.
 Step 1: Push a Version Tag
 --------------------------
 
-The npm package is at `0.2.0`. Tag the current commit to match:
+The npm package is at `0.3.1`. Tag the current commit to match:
 
 ```zsh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 That's all jsDelivr needs. Within minutes the following URL becomes active and permanent:
 
 ```
-https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh.js
-https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh.wasm
+https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js
+https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.wasm
 ```
 
-Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh.js`
+Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js`
 in a browser. If it returns the file, the URL is live.
 
 **For future releases:** bump the `version` field in `npm/package.json`, run
@@ -168,8 +168,8 @@ you add the Step 2 release workflow) a GitHub Release.
 
 ---
 
-Breaking change in 0.2.0: `simulatePipes()` is gone
----------------------------------------------------
+Breaking change in 0.2.0: simulatePipes() is gone
+-------------------------------------------------
 
 Pipelines are now run by zsh itself (see `docs/PLAN.md` section 6), so
 `web/zsh-runtime.js` no longer contains `simulatePipes()`, `hasPipelineOp()` or
@@ -195,8 +195,12 @@ way), but it would keep the bug class it carries: source it should not touch,
 such as an anonymous function `() { ... }`, comes out mangled unless every caller
 remembers the `hasPipelineOp()` guard first.
 
-The preamble shims are still needed and still vendored: `wc`, `grep`, `sort` and
-friends are what the pipeline stages actually run.
+The preamble is still needed and still vendored, but it is half the size it was:
+`wc`, `sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`,
+`mktemp`, `ls`, `basename`, `dirname` and `printenv` became compiled builtins in
+0.3.0, alongside `sed`, `awk` and `bc`. What is left in the preamble is the set a
+zsh function still does better — `cp`, `mv`, `rm`, `grep`, `find`, `xargs` and
+friends — and those are what the pipeline stages run.
 
 ---
 
@@ -215,7 +219,7 @@ headScripts: ['<script src="https://brandonzylstra.github.io/zsh-wasm/zsh.js"></
 
 // to:
 offlineCapable: true,
-headScripts: ['<script src="https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh.js"></script>'],
+headScripts: ['<script src="https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js"></script>'],
 ```
 
 The mutable GitHub Pages URL becomes the pinned jsDelivr URL. Both serve the same file,
@@ -228,11 +232,11 @@ but only the jsDelivr URL is safe to cache permanently.
   slug:    'zsh',
   name:    'Zsh',
   color:   '#89e051',
-  version: '0.2.0',
+  version: '0.3.1',
   pageUrl: groupPageUrl('zsh'), // resolves to /ruby/zsh/ on the Ruby anchor
   cdnUrls: [
-    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh.js',
-    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh.wasm',
+    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js',
+    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.wasm',
   ],
 },
 ```
@@ -251,7 +255,7 @@ navigates to the Zsh page. Both files should be listed.
 ### 3c. `public/sw.js` — add to `LANGUAGE_RUNTIME_CACHES`
 
 ```js
-zsh: 'codecompared-zsh-runtime-0.2.0',
+zsh: 'codecompared-zsh-runtime-0.3.1',
 ```
 
 This must stay in sync with the `version` field in the `CACHE_GROUPS` entry above.
@@ -287,15 +291,19 @@ pick up the new runtime on their next page load.
 
 ---
 
-Current Blocking Issues (as of 2026-07-31)
+Current Blocking Issues (as of 2026-08-02)
 ------------------------------------------
 
-| Issue                                  | Status                        | Fix                                          |
-| -------------------------------------- | ----------------------------- | -------------------------------------------- |
-| No `v0.2.0` tag yet                    | Blocks the CDN URL below      | Push `v0.2.0` (tags through `v0.1.6` exist)  |
-| No release workflow                    | Reduces release visibility    | Add `release.yml` (optional; `publish-npm.yaml` already publishes on tag) |
-| GitHub Pages URL in `lib/languages.js` | Mutable, unsafe to cache      | Swap after tag is live                       |
-| `offlineCapable` not set               | Zsh absent from offline modal | Set after CDN URL is in place                |
-| CodeCompared vendors `simulatePipes()` | Its fetch script throws on 0.2.0 | See "Breaking change in 0.2.0" above      |
+| Issue                                  | Status                             | Fix                                                                       |
+| -------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
+| `v0.3.1` not tagged or pushed          | Blocks the CDN URL above           | `git push origin main && git push origin v0.3.1` (`v0.3.0` is the newest tag) |
+| No release workflow                    | Reduces release visibility         | Add `release.yml` (optional; `publish-npm.yaml` already publishes on tag) |
+| GitHub Pages URL in `lib/languages.js` | Mutable, unsafe to cache           | Swap after tag is live                                                    |
+| `offlineCapable` not set               | Zsh absent from offline modal      | Set after CDN URL is in place                                             |
+| CodeCompared vendors `simulatePipes()` | Its fetch script throws on ≥ 0.2.0 | See "Breaking change in 0.2.0" above                                      |
 
 All are resolved by the steps above, in order.
+
+`v0.2.0` was never tagged — the pipeline work shipped and `0.3.0` followed before
+a tag went up — so CodeCompared is still on the mutable GitHub Pages URL and
+crosses the `simulatePipes()` break in the same move.
