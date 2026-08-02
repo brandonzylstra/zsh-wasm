@@ -1003,18 +1003,23 @@ than a bloat-or-skip binary decision.
 Priority Order Summary
 ----------------------
 
-| #   | Item                      | Effort   | Removes knownFail | Impact                     |
-| --- | ------------------------- | -------- | ----------------- | -------------------------- |
-| 1a  | zsh/mathfunc static build | 30 min   | yes               | low                        |
-| 1b  | grep shim stdin           | 1 hr     | yes               | medium                     |
-| 1c  | wc/cat stdin              | 1 hr     | no                | low                        |
-| 2   | Compiled grep             | 2–3 days | yes               | high                       |
-| 3   | Compiled bc               | 2–3 days | no                | medium                     |
-| 4   | find shim                 | 2 hr     | no                | medium                     |
-| 5   | Compiled diff             | 1–2 days | no                | low                        |
-| 6   | Pipelines without fork()  | done     | yes               | very high                  |
-| 6d  | Compiled coreutils        | weeks    | no                | high                       |
-| 7   | idbfs testing             | done     | no                | medium                     |
-| 8   | Module install-on-demand  | weeks    | no                | high (prerequisite for jq) |
-| 9   | jq                        | weeks    | no                | high (after #8)            |
-| 10  | Demo improvements         | done     | no                | medium                     |
+| #   | Item                       | State     | Notes                                            |
+| --- | -------------------------- | --------- | ------------------------------------------------ |
+| 1a  | zsh/mathfunc static build  | done      |                                                  |
+| 1b  | grep shim stdin            | done      |                                                  |
+| 1c  | wc/cat stdin               | done      |                                                  |
+| 1d  | stdin/pipe bugs in shims   | done      |                                                  |
+| 1e  | errexit safety in shims    | done      |                                                  |
+| 1f  | empty-input phantom lines  | done      |                                                  |
+| 1g  | `tail -n +N`, `sort -t`    | done      |                                                  |
+| 2   | Compiled grep              | deferred  | see 6d's grep section — a BRE/ERE decision first  |
+| 3   | Compiled bc                | done      |                                                  |
+| 4   | find shim                  | done      |                                                  |
+| 5   | Compiled diff              | open      | low priority; nothing depends on it               |
+| 6   | Pipelines without fork()   | done      | the big one                                       |
+| 6b  | Compiled tools re-entrant  | done      |                                                  |
+| 6d  | Compiled coreutils (sbase) | done      | 16 tools; grep/ls/find exceptions documented      |
+| 7   | idbfs testing              | done      |                                                  |
+| 8   | Module install-on-demand   | open      | prerequisite for jq; no pressure until then       |
+| 9   | jq                         | open      | after 8                                           |
+| 10  | Demo improvements          | done      |                                                  |
