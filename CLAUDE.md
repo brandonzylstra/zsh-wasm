@@ -84,9 +84,9 @@ Because `fork()` is not available in WASM, external utilities are shimmed as
 zsh functions that run inside the same WASM process. The preamble is prepended
 to every script automatically. What remains in it after the sbase port is the
 set where a zsh function beats a compiled tool — because it needs the shell's
-own knowledge, or needs something `fork()`-less C cannot do: `ls`, `cp`, `mv`,
-`rm`, `ln`, `grep`, `find`, `xargs`, `env`, `which`, `date`, `sleep`,
-`realpath`, `base64`, plus the stubs for unavailable binaries.
+own knowledge, or needs something `fork()`-less C cannot do: `cp`, `mv`, `rm`,
+`ln`, `grep`, `find`, `xargs`, `env`, `which`, `date`, `sleep`, `realpath`,
+`base64`, plus the stubs for unavailable binaries.
 
 Editing the preamble: it is a JavaScript template literal, so a backtick or an
 unescaped `${` inside it — including inside a zsh comment — ends the string and
@@ -95,9 +95,9 @@ breaks `zsh-runtime.js` at parse time. Quote shell snippets in comments with
 loudly on this; a Playwright run just hangs with zero tests completed.
 
 `sed`, `awk`, and `bc` are compiled directly into the WASM binary (not shims)
-via `bin/build --with-sed --with-awk --with-bc`, and fifteen sbase tools (`wc`,
+via `bin/build --with-sed --with-awk --with-bc`, and sixteen sbase tools (`wc`,
 `sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`,
-`mktemp`, `basename`, `dirname`, `printenv`) via `--with-sbase`. The published
+`mktemp`, `ls`, `basename`, `dirname`, `printenv`) via `--with-sbase`. The published
 package includes all of them, so the shipped build command is:
 
     bin/build --with-sed --with-awk --with-bc --with-sbase

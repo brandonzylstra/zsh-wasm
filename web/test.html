@@ -197,15 +197,32 @@ const tests = [
     { name: 'ls-basic',
       script: 'mkdir -p /tmp/ls1\ntouch /tmp/ls1/a.txt /tmp/ls1/b.txt\nls /tmp/ls1',
       expected: 'a.txt\nb.txt' },
+    // -a lists . and .. as ls does; -A is the one that leaves them out. The
+    // shim these replaced treated -a as -A.
     { name: 'ls-hidden',
       script: 'mkdir -p /tmp/ls2\ntouch /tmp/ls2/.dot /tmp/ls2/vis\nls -a /tmp/ls2',
+      expected: '.\n..\n.dot\nvis' },
+    { name: 'ls-almost-all',
+      script: 'mkdir -p /tmp/ls2b\ntouch /tmp/ls2b/.dot /tmp/ls2b/vis\nls -A /tmp/ls2b',
       expected: '.dot\nvis' },
     { name: 'ls-long',
       script: 'mkdir -p /tmp/ls3\necho hi > /tmp/ls3/f.txt\nls -l /tmp/ls3',
       expected_contains: 'f.txt' },
+    // -R prints a section per directory, as ls does
     { name: 'ls-recursive',
       script: 'mkdir -p /tmp/ls4/sub\ntouch /tmp/ls4/a.txt /tmp/ls4/sub/b.txt\nls -R /tmp/ls4',
-      expected_contains: 'sub/b.txt' },
+      expected: 'a.txt\nsub\n\n/tmp/ls4/sub:\nb.txt' },
+    // long format: file type, link count, owner, group, size, name. No passwd
+    // database exists in wasm, so owner and group show as numeric 0.
+    { name: 'ls-long-format',
+      script: "mkdir -p /tmp/ls5\necho hi > /tmp/ls5/f.txt\nls -l /tmp/ls5 | cut -c1-11",
+      expected: '-rw-r--r-- ' },
+    { name: 'ls-symlink-target',
+      script: "mkdir -p /tmp/ls6\necho hi > /tmp/ls6/f.txt\nzmodload zsh/files\nzf_ln -s /tmp/ls6/f.txt /tmp/ls6/l\nls -l /tmp/ls6 | grep -c ' l -> /tmp/ls6/f.txt'",
+      expected: '1' },
+    { name: 'ls-classify',
+      script: 'mkdir -p /tmp/ls7/sub\ntouch /tmp/ls7/a.txt\nls -F /tmp/ls7',
+      expected: 'a.txt\nsub/' },
     // globs
     { name: 'glob',
       script: 'mkdir -p /tmp/gl\ntouch /tmp/gl/a.txt /tmp/gl/b.log\necho /tmp/gl/*.txt',
@@ -986,9 +1003,12 @@ const tests = [
       script: "printf 'Hello, World!' | tail -c 6",
       expected: 'World!' },
     // which
-    { name: 'which-function',
+    { name: 'which-builtin',
       script: "which ls",
-      expected: 'ls: shell function' },
+      expected: 'ls: builtin' },
+    { name: 'which-function',
+      script: "myfunc() { :; }\nwhich myfunc",
+      expected: 'myfunc: shell function' },
     { name: 'which-notfound',
       script: "which nonexistent_cmd_xyz 2>&1; echo exit=$?",
       expected: 'which: no nonexistent_cmd_xyz in PATH\nexit=1' },

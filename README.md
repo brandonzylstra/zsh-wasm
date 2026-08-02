@@ -315,11 +315,12 @@ bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
                Requires bc-src/ in the project root (included in this repo).
                `echo 'scale=4; 22/7' | bc`, here-strings and heredocs all
                work. dc is also available.
-  --with-sbase Compile fifteen sbase tools (wc, sort, cut, head, tail, uniq,
-               tr, cat, tee, seq, touch, mktemp, basename, dirname, printenv)
+  --with-sbase Compile sixteen sbase tools (wc, sort, cut, head, tail, uniq,
+               tr, cat, tee, seq, touch, mktemp, ls, basename, dirname,
+               printenv)
                into the wasm binary as builtins, replacing their zsh-function
-               shims. Requires sbase-src/ (included in this repo). Set
-               SBASE_TOOLS to build a subset.
+               shims (and ls). Requires sbase-src/ (included in this repo).
+               Set SBASE_TOOLS to build a subset.
 
 The published build is:
 
@@ -445,6 +446,7 @@ error messages and all.
 | `seq`   | sbase | `-f fmt` `-s sep` `-w`; integer and float steps |
 | `touch` | sbase | `-a` `-c` `-m` `-d/-t/-T time` `-r file` |
 | `mktemp`| sbase | `-d` `-q` `-t` `-u` `-p dir` |
+| `ls`      | sbase | `-1 -A -a -c -d -F -f -H -h -i -L -l -n -p -q -R -r -U -u`; symlink targets, real file types |
 | `basename` / `dirname` | sbase | suffix stripping; POSIX path rules |
 | `printenv` | sbase | `[var ...]` |
 
@@ -461,7 +463,6 @@ without `fork()`.
 
 | Command  | Flags supported      | Notes |
 |----------|----------------------|-------|
-| `ls`     | `-a`/`-A` `-l` `-R`  | `-l` shows real mode/size/mtime via `zstat`; `-a` includes dotfiles; `-R` recurses |
 | `cp`     | —                    | single-file copy |
 | `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
 | `rm`      | `-f` `-r`/`-rf`     | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |

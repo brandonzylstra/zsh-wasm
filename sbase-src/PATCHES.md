@@ -2,10 +2,10 @@ sbase-src — what was changed and why
 ====================================
 
 Vendored from [sbase](https://git.suckless.org/sbase) (suckless, MIT — see
-`LICENSE`), cloned 2026-08-01. Only the files needed by the fifteen tools we
-compile are here — basename, cat, cut, dirname, head, mktemp, printenv, seq,
-sort, tail, tee, touch, tr, uniq, wc — plus the `libutil`/`libutf` members they
-reach. The hashes, the recursion helpers and the other 90-odd tools were left
+`LICENSE`), cloned 2026-08-01. Only the files needed by the sixteen tools we
+compile are here — basename, cat, cut, dirname, head, ls, mktemp, printenv,
+seq, sort, tail, tee, touch, tr, uniq, wc — plus the `libutil`/`libutf` members
+they reach. The hashes, the recursion helpers and the other 90-odd tools were left
 behind.
 
 See `docs/PLAN.md` item 6d for why sbase and not BusyBox. Most changes below
@@ -54,7 +54,7 @@ Upstream has the same bug whenever stdout is not a terminal — piped
 Per-tool state resets
 ---------------------
 
-wc, sort, tail, uniq, tr, cut and touch keep options and accumulators in
+wc, sort, tail, uniq, tr, cut, touch and ls keep options and accumulators in
 file-scope statics, which a program initializes once. A builtin is entered
 repeatedly, so each grew a `reset_state()` called at the top of `main()`.
 Without it, `wc a; wc b` reports a running total, a second `cut` inherits the
@@ -118,3 +118,7 @@ Known divergences left alone
   behavior; BSD appends one. GNU's reading is the more useful of the two.
 - Column widths otherwise follow BSD, except `wc`, which stays unpadded — the
   deliberate project convention recorded in `docs/PLAN.md` 1d.
+- `ls -l` shows owner and group as numeric `0`. Emscripten has no passwd
+  database, so `getpwuid()` returns NULL and sbase falls back to the id, which
+  is what `ls -n` prints. Inventing a name would be worse than showing the
+  truth: there are no users in a wasm filesystem.

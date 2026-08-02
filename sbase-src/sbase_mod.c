@@ -105,6 +105,15 @@ bin_sbase_head(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int 
 }
 #endif
 
+#ifdef SBASE_HAVE_LS
+/**/
+static int
+bin_sbase_ls(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("ls", args, ls_main);
+}
+#endif
+
 #ifdef SBASE_HAVE_MKTEMP
 /**/
 static int
@@ -211,6 +220,9 @@ static struct builtin bintab[] = {
 #endif
 #ifdef SBASE_HAVE_HEAD
     BUILTIN("head",     0, bin_sbase_head,     0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_LS
+    BUILTIN("ls",      0, bin_sbase_ls,      0, -1, 0, NULL, NULL),
 #endif
 #ifdef SBASE_HAVE_MKTEMP
     BUILTIN("mktemp",   0, bin_sbase_mktemp,   0, -1, 0, NULL, NULL),

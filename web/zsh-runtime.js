@@ -199,56 +199,6 @@ grep() { setopt localoptions noerrexit;
   done
   return $(( !_any_hit ))
 }
-_ls_modestr() { setopt localoptions noerrexit;
-  local m=$1 t p=''
-  if   (( (m & 0170000) == 0040000 )); then t=d
-  elif (( (m & 0170000) == 0120000 )); then t=l
-  elif (( (m & 0170000) == 0100000 )); then t=-
-  elif (( (m & 0170000) == 0060000 )); then t=b
-  elif (( (m & 0170000) == 0020000 )); then t=c
-  elif (( (m & 0170000) == 0010000 )); then t=p
-  else t='?'
-  fi
-  local -a ms=(0400 0200 0100 0040 0020 0010 0004 0002 0001)
-  local -a cs=(r    w    x    r    w    x    r    w    x   )
-  local i
-  for (( i=1; i<=9; i++ )); do (( m & ms[i] )) && p+=$cs[i] || p+='-'; done
-  _MODESTR="$t$p"
-}
-ls() { setopt localoptions noerrexit;
-  local show_all=0 long=0 recursive=0
-  local -a args
-  for a; do
-    if [[ $a == -* ]]; then
-      [[ $a == *[aA]* ]] && show_all=1
-      [[ $a == *l*   ]] && long=1
-      [[ $a == *R*   ]] && recursive=1
-    else
-      args+=($a)
-    fi
-  done
-  local d=\${args[1]:-.}
-  local -a files
-  if   (( recursive && show_all )); then files=($d/**/*(DN))
-  elif (( recursive ));             then files=($d/**/*(N))
-  elif (( show_all ));              then files=($d/*(DN))
-  else                                   files=($d/*(N))
-  fi
-  (( long )) && zmodload zsh/datetime 2>/dev/null
-  local f name _ls_ts
-  local -A _ls_stat
-  for f in $files; do
-    (( recursive )) && name="\${f#\${d%/}/}" || name="\${f:t}"
-    if (( long )); then
-      zstat -H _ls_stat "$f"
-      _ls_modestr $_ls_stat[mode]
-      strftime -s _ls_ts '%b %e %H:%M' $_ls_stat[mtime]
-      printf '%s %6d %s %s\\n' "$_MODESTR" "$_ls_stat[size]" "$_ls_ts" "$name"
-    else
-      print $name
-    fi
-  done
-}
 cp() { setopt localoptions noerrexit; print -r -- "$(<$1)" > "$2" }
 mv() { setopt localoptions noerrexit; cp "$1" "$2" && zf_rm "$1" }
 date() { setopt localoptions noerrexit;

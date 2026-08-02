@@ -72,6 +72,7 @@ imitations of them:
 | `seq`     | sbase | `-f -s -w` |
 | `touch`   | sbase | `-a -c -m -d -t -T -r` |
 | `mktemp`  | sbase | `-d -q -t -u -p` |
+| `ls`      | sbase | `-1 -A -a -d -F -h -i -l -p -R -r -t -U -u`; symlink targets |
 | `basename` / `dirname` / `printenv` | sbase | POSIX |
 
 Provided as zsh functions, where the shell knows something a compiled tool
@@ -79,7 +80,6 @@ would not, or where the tool would need `fork()`:
 
 | Command | Flags |
 |---------|-------|
-| `ls`      | `-a`/`-A` `-l` `-R` |
 | `cp` / `mv` | — |
 | `rm`      | `-f` `-r`/`-rf` |
 | `mkdir`   | (native syscall) |

@@ -787,17 +787,17 @@ tests pass unchanged.
 
 ### Ported (2026-08-01)
 
-Fifteen tools compiled in and their shims deleted: `wc`, `sort`, `cut`, `head`,
-`tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`, `mktemp`, `basename`,
+Sixteen tools compiled in and their shims deleted: `wc`, `sort`, `cut`, `head`,
+`tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`, `mktemp`, `ls`, `basename`,
 `dirname`, `printenv`. `bin/build --with-sbase` is now part of the shipped
 build.
 
 | | before | after |
 | --- | --- | --- |
-| `zsh.wasm` | 1291.0 KB | 1337.9 KB (+46.9 KB, +3.6%) |
-| `BUILTINS_PREAMBLE` | 32.1 KB | 19.2 KB (−12.9 KB, −40%) |
+| `zsh.wasm` | 1291.0 KB | 1343.3 KB (+52.3 KB, +4.1%) |
+| `BUILTINS_PREAMBLE` | 32.1 KB | 17.6 KB (−14.5 KB, −45%) |
 | preamble parse, per run | 9.5 ms | 7.7 ms |
-| tests | 296 | 312, same 2 known-fail |
+| tests | 296 | 317, same 2 known-fail |
 
 The marginal cost fell sharply after the first three: 4.3 KB bought the shared
 `libutil`/`libutf` and `wc`, the next two cost ~10 KB each, and the remaining
@@ -825,7 +825,6 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
 | Command | Why the shim stays |
 | --- | --- |
 | `grep` | sbase's grep has no `-r`, `-o`, `-m` or `-A`/`-B`/`-C`. Ours does. Porting it would *lose* capability |
-| `ls` | sbase's is a superset, but `-l` wants a passwd database MEMFS does not have. Worth revisiting |
 | `find` | 1103 lines and 105 statics for a glob the shim already does; `-exec` needs `fork()` anyway |
 | `xargs`, `env` | both run a command, which without `exec()` only the shell can do |
 | `which` | ours knows about shell functions and builtins; a PATH search does not |
@@ -841,8 +840,12 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
 - [x] Decide: adopt
 - [x] Port the rest of the worthwhile tools (15 total) and delete their shims
 - [x] Switch the shipped build to `--with-sbase`
-- [ ] Revisit `ls` — sbase's has `-i -h -t -S -F` and much more, if `-l`'s
-      passwd lookups can be made to behave under MEMFS
+- [x] `ls` ported too (+5.4 KB). `getpwuid()` returns NULL under Emscripten, and
+      sbase already falls back to the numeric id, so `-l` shows owner/group as
+      `0` — which is the truth. Three tests changed because the shim had been
+      wrong: `-a` now lists `.` and `..` (that was `-A` behavior), `-R` prints a
+      section per directory, and `-l` finally shows real file types and symlink
+      targets rather than a leading `?`.
 - [ ] Consider patching sbase's grep up to the shim's feature set, or leave
       item 2's OpenBSD-grep plan as the path for a compiled grep
 
