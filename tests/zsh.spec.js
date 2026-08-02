@@ -56,3 +56,39 @@ test('a hung run rejects with a timeout and the worker pool recovers', async ({ 
     expect(result.first).toContain('timed out');
     expect(result.second).toBe('recovered');
 });
+
+// The { fs: 'idbfs' } option has shipped since 0.1.x without a test. These are
+// that test: files under /home/user must survive both a second run in the same
+// page and a full page reload, and must NOT appear in a default memfs run.
+test('idbfs persists files across runs and across a page reload', async ({ page }) => {
+    await page.goto('/test.html');
+
+    const marker = `persist-${Date.now()}`;
+    const written = await page.evaluate(async (value) => {
+        const { runZshScript } = await import('./zsh-runtime.js');
+        // A fresh mount each time, so this also proves the sync-in/sync-out pair works.
+        await runZshScript(`mkdir -p /home/user; echo ${value} > /home/user/marker.txt`, { fs: 'idbfs' });
+        const second = await runZshScript('cat /home/user/marker.txt', { fs: 'idbfs' });
+        return second.stdout.trim();
+    }, marker);
+    expect(written, 'second run in the same page should see the file').toBe(marker);
+
+    await page.reload();
+    const afterReload = await page.evaluate(async () => {
+        const { runZshScript } = await import('./zsh-runtime.js');
+        const result = await runZshScript('cat /home/user/marker.txt', { fs: 'idbfs' });
+        return result.stdout.trim();
+    });
+    expect(afterReload, 'a page reload should not lose the file').toBe(marker);
+});
+
+test('the default memfs backend does not persist between runs', async ({ page }) => {
+    await page.goto('/test.html');
+    const result = await page.evaluate(async () => {
+        const { runZshScript } = await import('./zsh-runtime.js');
+        await runZshScript('echo ephemeral > /tmp/memfs-check.txt');
+        const second = await runZshScript('cat /tmp/memfs-check.txt 2>/dev/null; echo "exit=$?"');
+        return second.stdout.trim();
+    });
+    expect(result, 'memfs must start clean on every run').toBe('exit=1');
+});

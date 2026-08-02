@@ -851,21 +851,20 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
 
 ---
 
-7. idbfs testing
-----------------
+7. idbfs testing ✓ done
+-----------------------
 
-**Status:** The `{ fs: 'idbfs' }` option exists and the code path is wired, but
-it has never been explicitly tested. If it's broken, we don't know.
+**Status:** Complete (2026-08-01). It works — which we now know rather than
+assume. Two Playwright tests in `tests/zsh.spec.js`: one writes under
+`/home/user` with `{ fs: 'idbfs' }` and reads it back both in a second run and
+after a full `page.reload()`; the other asserts the default memfs backend starts
+clean every run, so the persistence result means something.
 
 **Checklist:**
-- [ ] Write a Playwright test that:
-  1. Calls `runZshScript('echo persistent > /home/user/test.txt', { fs: 'idbfs' })`
-  2. Calls `runZshScript('cat /home/user/test.txt', { fs: 'idbfs' })` in a
-     second call (simulating a page reload is harder — at minimum verify
-     within-session persistence between two calls)
-- [ ] Document the `IDBFS_MOUNT` path (`/home/user`) in the README
-- [ ] Test that the default `memfs` path does NOT persist between calls (already
-      implicitly tested by test isolation, but worth making explicit)
+- [x] Playwright test: write under `/home/user` with `{ fs: 'idbfs' }`, read it
+      back in a second run, then again after a page reload
+- [x] Test that the default `memfs` path does NOT persist between calls
+- [x] `IDBFS_MOUNT` (`/home/user`) is documented in the README
 
 **Obstacles:** idbfs requires the browser's IndexedDB API. Playwright's
 Chromium has IndexedDB but it may behave differently under `file://` vs. a
@@ -976,7 +975,7 @@ Priority Order Summary
 | 5   | Compiled diff             | 1–2 days | no                | low                        |
 | 6   | Pipelines without fork()  | done     | yes               | very high                  |
 | 6d  | Compiled coreutils        | weeks    | no                | high                       |
-| 7   | idbfs testing             | 2 hr     | no                | medium                     |
+| 7   | idbfs testing             | done     | no                | medium                     |
 | 8   | Module install-on-demand  | weeks    | no                | high (prerequisite for jq) |
 | 9   | jq                        | weeks    | no                | high (after #8)            |
 | 10  | Demo improvements         | 2–4 hr   | no                | medium                     |
