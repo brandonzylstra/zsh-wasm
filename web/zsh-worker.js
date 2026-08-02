@@ -103,6 +103,17 @@ self.onmessage = async ({ data: { src, fs, idbfsMount, stdin, busySleepFallback 
         else throw e;
     }
 
+    // Emscripten's tty only hands a line to the print callback when it sees a
+    // newline, so output that does not end in one -- `head -c 5`, `printf x` --
+    // would sit in the buffer and never arrive. Flush libc first, then the tty.
+    try {
+        module._fflush?.(0);
+        for (const fd of [1, 2]) {
+            const stream = module.FS.streams[fd];
+            stream?.stream_ops?.fsync?.(stream);
+        }
+    } catch (e) {}
+
     if (fs === 'idbfs') {
         await new Promise((res, rej) =>
             module.FS.syncfs(false, err => err ? rej(err) : res()));
