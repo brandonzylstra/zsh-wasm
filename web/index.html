@@ -750,6 +750,12 @@ wc -l /tmp/ex/nums.txt /tmp/ex/letters.txt
 echo "---"
 cp /tmp/ex/nums.txt /tmp/ex/copy.txt
 ls /tmp/ex/
+echo "--- ls -l: mode, links, owner, group, size, mtime ---"
+# There are no users in a wasm filesystem, so owner and group show as 0.
+mkdir -p /tmp/ex/sub
+ls -l /tmp/ex/
+echo "--- ls -F marks directories with a trailing / ---"
+ls -F /tmp/ex/
 echo "---"
 [[ -f /tmp/ex/copy.txt ]] && echo "copy.txt: exists"
 [[ -d /tmp/ex ]]          && echo "/tmp/ex:  is a directory"
@@ -780,16 +786,20 @@ sort /tmp/w.txt
 echo "=== sort -u (unique) ==="
 sort -u /tmp/w.txt
 
-echo "=== uniq (adjacent dedup) ==="
-sort /tmp/w.txt > /tmp/ws.txt
-uniq /tmp/ws.txt
+echo "=== count occurrences: sort | uniq -c | sort -rn ==="
+sort /tmp/w.txt | uniq -c | sort -rn
 
 echo "=== cut -d, -f2 ==="
 printf 'name,age,city\nAlice,30,NYC\nBob,25,LA\n' > /tmp/csv.txt
 cut -d, -f2 /tmp/csv.txt
 
-echo "=== tr ==="
+echo "=== sort a CSV by a numeric column: -t, -k2 -n ==="
+printf 'pear,12\napple,5\nfig,30\n' | sort -t, -k2 -n
+
+echo "=== tr: translate, squeeze, delete ==="
 tr 'a-z' 'A-Z' <<< "hello world"
+tr -s ' ' <<< "too   many    spaces"
+tr -d aeiou <<< "remove the vowels"
 </script>
 
 <script type="text/zsh" data-id="find" data-stdout="#out-find" data-stderr="#out-find">

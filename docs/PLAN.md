@@ -988,8 +988,12 @@ than a bloat-or-skip binary decision.
 **Status:** `web/index.html` exists but predates sed, awk, and most shims.
 
 **Checklist:**
-- [ ] Add examples showcasing sed, awk, grep (once compiled)
-- [ ] Add an example using `bc` for floating-point math
+- [x] Add examples showcasing sed, awk, grep — all three have their own cards
+- [x] Add an example using `bc` for floating-point math — the `bc` card does
+      `scale=20; 355/113` and a recursive factorial
+- [x] Add a Pipelines card (2026-07-31), now that pipelines work
+- [x] Show what the compiled tools can do that the shims could not: `ls -l`
+      with real file types, `sort -t, -k2 -n`, `uniq -c`, `tr -s`/`-d`
 - [x] ~~Add a "what doesn't work" message for pipes~~ — removed along with
       `simulatePipes()`: pipes work now, so the diagnostic and its test are gone.
 - [x] Add syntax highlighting for zsh code in the example editor
@@ -1013,4 +1017,4 @@ Priority Order Summary
 | 7   | idbfs testing             | done     | no                | medium                     |
 | 8   | Module install-on-demand  | weeks    | no                | high (prerequisite for jq) |
 | 9   | jq                        | weeks    | no                | high (after #8)            |
-| 10  | Demo improvements         | 2–4 hr   | no                | medium                     |
+| 10  | Demo improvements         | done     | no                | medium                     |
