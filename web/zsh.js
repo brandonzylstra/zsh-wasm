@@ -4866,6 +4866,54 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
   }
   
 
+  var readI53FromI64 = (ptr) => {
+      return HEAPU32[((ptr)>>2)] + HEAP32[(((ptr)+(4))>>2)] * 4294967296;
+    };
+  
+  function ___syscall_utimensat(dirfd, path, times, flags) {
+  try {
+  
+      path = SYSCALLS.getStr(path);
+      assert(!flags);
+      path = SYSCALLS.calculateAt(dirfd, path, true);
+      var now = Date.now(), atime, mtime;
+      if (!times) {
+        atime = now;
+        mtime = now;
+      } else {
+        var seconds = readI53FromI64(times);
+        var nanoseconds = HEAP32[(((times)+(8))>>2)];
+        if (nanoseconds == 1073741823) {
+          atime = now;
+        } else if (nanoseconds == 1073741822) {
+          atime = null;
+        } else {
+          atime = (seconds*1000) + (nanoseconds/(1000*1000));
+        }
+        times += 16;
+        seconds = readI53FromI64(times);
+        nanoseconds = HEAP32[(((times)+(8))>>2)];
+        if (nanoseconds == 1073741823) {
+          mtime = now;
+        } else if (nanoseconds == 1073741822) {
+          mtime = null;
+        } else {
+          mtime = (seconds*1000) + (nanoseconds/(1000*1000));
+        }
+      }
+      // null here means UTIME_OMIT was passed. If both were set to UTIME_OMIT then
+      // we can skip the call completely.
+      if ((mtime ?? atime) !== null) {
+        FS.utime(path, atime, mtime);
+      }
+      return 0;
+    } catch (e) {
+    if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
+    return -e.errno;
+  }
+  }
+  
+
   var __abort_js = () =>
       abort('native code called abort()');
 
@@ -5780,7 +5828,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'writeI53ToI64Signaling',
   'writeI53ToU64Clamped',
   'writeI53ToU64Signaling',
-  'readI53FromI64',
   'readI53FromU64',
   'convertI32PairToI53',
   'convertI32PairToI53Checked',
@@ -5943,6 +5990,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'wasmExports',
   'writeStackCookie',
   'checkStackCookie',
+  'readI53FromI64',
   'INT53_MAX',
   'INT53_MIN',
   'bigintToI53Checked',
@@ -6295,6 +6343,8 @@ var wasmImports = {
   __syscall_umask: ___syscall_umask,
   /** @export */
   __syscall_unlinkat: ___syscall_unlinkat,
+  /** @export */
+  __syscall_utimensat: ___syscall_utimensat,
   /** @export */
   _abort_js: __abort_js,
   /** @export */

@@ -785,21 +785,66 @@ just taking sbase's). Keep `base64` and `realpath` as shims — sbase has no
 equivalent. Measure the wasm after each, and delete each shim only once its
 tests pass unchanged.
 
+### Ported (2026-08-01)
+
+Fifteen tools compiled in and their shims deleted: `wc`, `sort`, `cut`, `head`,
+`tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`, `mktemp`, `basename`,
+`dirname`, `printenv`. `bin/build --with-sbase` is now part of the shipped
+build.
+
+| | before | after |
+| --- | --- | --- |
+| `zsh.wasm` | 1291.0 KB | 1337.9 KB (+46.9 KB, +3.6%) |
+| `BUILTINS_PREAMBLE` | 32.1 KB | 19.2 KB (−12.9 KB, −40%) |
+| preamble parse, per run | 9.5 ms | 7.7 ms |
+| tests | 296 | 312, same 2 known-fail |
+
+The marginal cost fell sharply after the first three: 4.3 KB bought the shared
+`libutil`/`libutf` and `wc`, the next two cost ~10 KB each, and the remaining
+twelve averaged under 2 KB.
+
+Four behaviors changed, all of them the compiled tool being right and the shim
+having been wrong:
+
+- `wc -l a b` prints a `total` line (fixed in the shim first, so the test was
+  already correct when the tool landed).
+- `head`/`tail` print `==> name <==` headers for multiple files.
+- Output not ending in a newline now arrives at all. Emscripten's tty hands a
+  line to the print callback only on `\n`, so `head -c 5` produced nothing;
+  `web/zsh-worker.js` now flushes libc and the tty after each run. Every shim
+  ended its output with `print`, which is why this never showed up before.
+- `tail a b` prints its headers before the contents they label — sbase mixes
+  `printf()` with raw `write()` to fd 1, which misorders whenever stdout is not
+  a terminal. Fixed once in `writeall()`.
+
+Everything else matched BSD's own tools byte for byte across 30-odd compared
+cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
+
+**Deliberately not ported**, with reasons:
+
+| Command | Why the shim stays |
+| --- | --- |
+| `grep` | sbase's grep has no `-r`, `-o`, `-m` or `-A`/`-B`/`-C`. Ours does. Porting it would *lose* capability |
+| `ls` | sbase's is a superset, but `-l` wants a passwd database MEMFS does not have. Worth revisiting |
+| `find` | 1103 lines and 105 statics for a glob the shim already does; `-exec` needs `fork()` anyway |
+| `xargs`, `env` | both run a command, which without `exec()` only the shell can do |
+| `which` | ours knows about shell functions and builtins; a PATH search does not |
+| `date` | ours goes through `zsh/datetime` and the browser's timezone |
+| `sleep` | ours blocks for real via `Atomics.wait()` in the worker |
+| `cp`, `mv`, `rm`, `ln` | one-line delegations to `zsh/files` builtins; nothing to gain |
+| `realpath`, `base64` | sbase has neither |
+
 **Checklist:**
 - [x] Evaluate BusyBox/toybox as one bundle vs. individual ports (BusyBox ruled
       out on license, sbase recommended)
-- [x] Spike: build sbase `wc`, `sort`, `cut` as one zsh module; measure wasm
-      growth and test-suite delta (`bin/build --with-sbase`)
-- [x] Decide: adopt. 1 test failure out of 296, and it was the shim being wrong.
-- [ ] Port the small tools next: head, tail, uniq, tr, basename, dirname, seq,
-      touch, which, printenv
-- [ ] Then the complex ones: grep, ls, find (this supersedes item 2's separate
-      OpenBSD-grep plan — take sbase's grep instead)
-- [ ] Delete each shim from `BUILTINS_PREAMBLE` as its compiled version lands,
-      and re-measure zsh.wasm each time
-- [ ] Switch the shipped build to `--with-sbase` once enough tools have landed
-      to be worth the size
-- [ ] `base64` and `realpath` have no sbase equivalent — keep those two shims
+- [x] Spike: build sbase `wc`, `sort`, `cut`; measure size and test delta
+- [x] Decide: adopt
+- [x] Port the rest of the worthwhile tools (15 total) and delete their shims
+- [x] Switch the shipped build to `--with-sbase`
+- [ ] Revisit `ls` — sbase's has `-i -h -t -S -F` and much more, if `-l`'s
+      passwd lookups can be made to behave under MEMFS
+- [ ] Consider patching sbase's grep up to the shim's feature set, or leave
+      item 2's OpenBSD-grep plan as the path for a compiled grep
 
 ---
 

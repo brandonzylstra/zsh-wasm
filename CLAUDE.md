@@ -82,10 +82,11 @@ BUILTINS_PREAMBLE
 
 Because `fork()` is not available in WASM, external utilities are shimmed as
 zsh functions that run inside the same WASM process. The preamble is prepended
-to every script automatically. It provides: `touch`, `cat`, `ls`, `cp`, `mv`,
-`wc`, `head`, `tail`, `grep`, `sort`, `uniq`, `cut`, `tr`, `date`, `basename`,
-`dirname`, `rm`, `tee`, `seq`, `mktemp`, `sleep`, `xargs`, `which`, `realpath`,
-`ln`, `base64`, and `find`.
+to every script automatically. What remains in it after the sbase port is the
+set where a zsh function beats a compiled tool — because it needs the shell's
+own knowledge, or needs something `fork()`-less C cannot do: `ls`, `cp`, `mv`,
+`rm`, `ln`, `grep`, `find`, `xargs`, `env`, `which`, `date`, `sleep`,
+`realpath`, `base64`, plus the stubs for unavailable binaries.
 
 Editing the preamble: it is a JavaScript template literal, so a backtick or an
 unescaped `${` inside it — including inside a zsh comment — ends the string and
@@ -94,8 +95,15 @@ breaks `zsh-runtime.js` at parse time. Quote shell snippets in comments with
 loudly on this; a Playwright run just hangs with zero tests completed.
 
 `sed`, `awk`, and `bc` are compiled directly into the WASM binary (not shims)
-via `bin/build --with-sed --with-awk --with-bc`. The published npm package
-includes all three.
+via `bin/build --with-sed --with-awk --with-bc`, and fifteen sbase tools (`wc`,
+`sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`,
+`mktemp`, `basename`, `dirname`, `printenv`) via `--with-sbase`. The published
+package includes all of them, so the shipped build command is:
+
+    bin/build --with-sed --with-awk --with-bc --with-sbase
+
+sbase sources are vendored in `sbase-src/`; `sbase-src/PATCHES.md` lists every
+change made to them for embedding, and is what makes a re-vendor tractable.
 
 Because they are builtins rather than processes, every call in a script shares
 one set of globals and one `stdin` FILE. Anything a tool leaves behind must be
@@ -110,7 +118,7 @@ Building
 ```zsh
 # Prerequisites: Emscripten, zsh-5.9 source at ./zsh-5.9/
 ./bin/build                          # slim build
-./bin/build --with-sed --with-awk    # with compiled builtins
+./bin/build --with-sed --with-awk --with-bc --with-sbase   # what ships
 ./bin/build --out npm/               # build and copy to npm/ for publishing
 
 # Test (requires HTTP server — file:// triggers CORS errors)

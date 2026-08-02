@@ -52,45 +52,47 @@ pool.shutdown();
 
 ## Available commands
 
-Zsh builtins work as-is. The following external commands are shimmed:
+Real implementations compiled into the wasm binary — these are the tools, not
+imitations of them:
 
-| Command   | Flags supported |
-|-----------|-----------------|
+| Command | Source | Notes |
+|---------|--------|-------|
+| `sed`     | OpenBSD sed | `s/pat/repl/[g]`, `-n`, `-e`, `-i`, address ranges, hold space |
+| `awk`     | one-true-awk | patterns, BEGIN/END, `-F`, `-v`, gsub/split/printf |
+| `bc`/`dc` | Gavin Howard bc | arbitrary precision, `scale`, `sqrt()`, functions |
+| `wc`      | sbase | `-l` `-w` `-c` `-m`, `total` line for multiple files |
+| `sort`    | sbase | `-b -C -c -d -f -i -k -m -n -o -r -t -u` |
+| `cut`     | sbase | `-b -c -d -f -n -s` |
+| `head`    | sbase | `-n N` `-N` `-c N` |
+| `tail`    | sbase | `-n N` `-N` `-n +N` `-c N` |
+| `uniq`    | sbase | `-c -d -u -f -s` |
+| `tr`      | sbase | full set translation, `-c -C -d -s` |
+| `cat`     | sbase | `-u` |
+| `tee`     | sbase | `-a -i` |
+| `seq`     | sbase | `-f -s -w` |
+| `touch`   | sbase | `-a -c -m -d -t -T -r` |
+| `mktemp`  | sbase | `-d -q -t -u -p` |
+| `basename` / `dirname` / `printenv` | sbase | POSIX |
+
+Provided as zsh functions, where the shell knows something a compiled tool
+would not, or where the tool would need `fork()`:
+
+| Command | Flags |
+|---------|-------|
 | `ls`      | `-a`/`-A` `-l` `-R` |
-| `cat`     | — |
-| `touch`   | — |
-| `cp`      | — |
-| `mv`      | — |
+| `cp` / `mv` | — |
 | `rm`      | `-f` `-r`/`-rf` |
-| `mkdir`   | (native) |
-| `ln`      | `-s` `-f` |
-| `wc`      | `-l` `-w` `-c` |
-| `head`    | `-n N` `-N` `-c N` |
-| `tail`    | `-n N` `-N` `-c N` |
+| `mkdir`   | (native syscall) |
+| `ln`      | `-s` `-f` (symlinks only; MEMFS has no hard links) |
 | `grep`    | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` |
-| `sort`    | `-r` `-n` `-u` `-k N` |
-| `uniq`    | — |
-| `cut`     | `-d` `-f` `-c` |
-| `tr`      | `-d` (stdin only) |
-| `sed`     | `s/pat/repl/[g]` `-n` `-e` `-i ''` (stdin only) |
-| `awk`     | patterns, BEGIN/END, `-F` `-v` (file args / `<<<` only) |
 | `find`    | `-name` `-type` `-maxdepth` `-newer` |
 | `xargs`   | `-I` `-n` |
-| `tee`     | `-a` |
-| `date`    | `+FORMAT` |
-| `seq`     | `N`, `start N`, `start step N` |
-| `sleep`   | seconds (float) |
-| `mktemp`  | `-d`, template |
 | `env`     | `VAR=val` `-u VAR` |
-| `printenv`| `[VAR ...]` |
-| `which`   | — |
-| `realpath`| — |
-| `basename`| suffix arg |
-| `dirname` | — |
+| `which`   | knows shell functions and builtins |
+| `date`    | `+FORMAT`, browser timezone |
+| `sleep`   | seconds (float), real blocking with COOP+COEP |
+| `realpath` | — |
 | `base64`  | `-d`/`--decode` |
-| `bc` / `dc` | arbitrary-precision math (compiled in; reads pipes, `<<<` and heredocs) |
-
-Well-known unavailable commands (curl, git, python3, docker, etc.) emit a helpful stderr message and return exit code 127 without aborting the script.
 
 ## Known limitations
 

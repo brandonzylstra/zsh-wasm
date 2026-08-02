@@ -32,8 +32,20 @@ extern int     sbase_exit_code;
 void sbase_do_exit(int code);
 
 /* Renamed from main() at compile time with -Dmain=<tool>_main. */
-int wc_main(int argc, char *argv[]);
-int sort_main(int argc, char *argv[]);
+int basename_main(int argc, char *argv[]);
+int cat_main(int argc, char *argv[]);
 int cut_main(int argc, char *argv[]);
+int dirname_main(int argc, char *argv[]);
+int head_main(int argc, char *argv[]);
+int mktemp_main(int argc, char *argv[]);
+int printenv_main(int argc, char *argv[]);
+int seq_main(int argc, char *argv[]);
+int sort_main(int argc, char *argv[]);
+int tail_main(int argc, char *argv[]);
+int tee_main(int argc, char *argv[]);
+int touch_main(int argc, char *argv[]);
+int tr_main(int argc, char *argv[]);
+int uniq_main(int argc, char *argv[]);
+int wc_main(int argc, char *argv[]);
 
 #endif /* ZSH_WASM_SBASE_EMBED_H */

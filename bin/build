@@ -620,7 +620,7 @@ MDH
     # editing the source, which is what sbase's own scripts/mkbox does with sed.
     # Overridable so the size cost of an individual tool can be measured:
     #   SBASE_TOOLS=wc bin/build --with-sbase --out /tmp/measure
-    SBASE_TOOLS="${SBASE_TOOLS:-wc sort cut}"
+    SBASE_TOOLS="${SBASE_TOOLS:-basename cat cut dirname head mktemp printenv seq sort tail tee touch tr uniq wc}"
 
     echo "==> compiling sbase-src/ tools: $SBASE_TOOLS"
     SBASE_TOOL_OBJS=()

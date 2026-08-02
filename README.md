@@ -299,6 +299,7 @@ bin/build
 
 ```
 bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
+          [--with-sbase]
 
   --debug      Compile with -O0 -g instead of -Os, and link with
                -sASSERTIONS=1 -gsource-map. Produces a larger build with
@@ -314,6 +315,15 @@ bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
                Requires bc-src/ in the project root (included in this repo).
                `echo 'scale=4; 22/7' | bc`, here-strings and heredocs all
                work. dc is also available.
+  --with-sbase Compile fifteen sbase tools (wc, sort, cut, head, tail, uniq,
+               tr, cat, tee, seq, touch, mktemp, basename, dirname, printenv)
+               into the wasm binary as builtins, replacing their zsh-function
+               shims. Requires sbase-src/ (included in this repo). Set
+               SBASE_TOOLS to build a subset.
+
+The published build is:
+
+  bin/build --with-sed --with-awk --with-bc --with-sbase
 ```
 
 JS modules
@@ -407,53 +417,69 @@ stage reading a finished pipe would never see EOF.
 The consequences are listed under Known Limitations: no isolation between stages,
 and no streaming.
 
-### Built-in shims
+### Commands
 
-WebAssembly cannot `fork`, so external binaries (`touch`, `cat`, `ls`, etc.) fail
-with "function not implemented". The loader prepends zsh function shims for the
-most common ones:
+WebAssembly cannot `fork`, so external binaries fail with "function not
+implemented". zsh-wasm supplies the common ones two ways.
+
+#### Compiled in
+
+Real implementations, compiled into `zsh.wasm` as zsh builtins. These behave
+like the tools they are, because they *are* the tools — flags, exit codes,
+error messages and all.
+
+| Command | Source | Notes |
+|---------|--------|-------|
+| `sed`   | OpenBSD sed | `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space |
+| `awk`   | one-true-awk (BWK) | patterns, BEGIN/END, `-F`, `-v`, gsub/sub/split, printf |
+| `bc`    | Gavin Howard bc | arbitrary precision, `scale`, `sqrt()`, user functions; `dc` too |
+| `wc`    | sbase | `-l` `-w` `-c` `-m`; a `total` line for multiple files |
+| `sort`  | sbase | `-b` `-C` `-c` `-d` `-f` `-i` `-k` `-m` `-n` `-o` `-r` `-t` `-u` |
+| `cut`   | sbase | `-b` `-c` `-d` `-f` `-n` `-s` |
+| `head`  | sbase | `-n N`, `-N`, `-c N`; `==> name <==` headers for multiple files |
+| `tail`  | sbase | `-n N`, `-N`, `-n +N`, `-c N`; headers for multiple files |
+| `uniq`  | sbase | `-c` `-d` `-u` `-f fields` `-s chars` |
+| `tr`    | sbase | full set translation, `-c` `-C` `-d` `-s` |
+| `cat`   | sbase | `-u`; multiple files |
+| `tee`   | sbase | `-a` `-i` |
+| `seq`   | sbase | `-f fmt` `-s sep` `-w`; integer and float steps |
+| `touch` | sbase | `-a` `-c` `-m` `-d/-t/-T time` `-r file` |
+| `mktemp`| sbase | `-d` `-q` `-t` `-u` `-p dir` |
+| `basename` / `dirname` | sbase | suffix stripping; POSIX path rules |
+| `printenv` | sbase | `[var ...]` |
+
+The sbase tools (suckless, MIT) are vendored in `sbase-src/`; every change made
+to them for embedding is listed in `sbase-src/PATCHES.md`. Build them with
+`--with-sbase`; sed, awk and bc have their own flags.
+
+#### zsh function shims
+
+Prepended to every script by the loader. These are approximations, and the ones
+still here are the cases where a zsh function is the *better* answer: they either
+need the shell's own knowledge, or they need something a compiled tool cannot do
+without `fork()`.
 
 | Command  | Flags supported      | Notes |
 |----------|----------------------|-------|
 | `ls`     | `-a`/`-A` `-l` `-R`  | `-l` shows real mode/size/mtime via `zstat`; `-a` includes dotfiles; `-R` recurses |
-| `touch`  | —                    | creates or updates files |
-| `cat`    | —                    | reads files via `$(<file)` substitution |
 | `cp`     | —                    | single-file copy |
 | `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
-| `wc`     | `-l` `-w` `-c`       | lines, words, bytes; default shows all three |
-| `head`   | `-n N`, `-N`, `-c N` | first N lines (default 10) or first N bytes |
-| `tail`   | `-n N`, `-N`, `-c N`, `-n +N` | last N lines (default 10) or last N bytes; `-n +N` starts at line N instead |
-| `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1 |
-| `sort`   | `-r` `-n` `-u` `-k N` `-t DELIM` | in-memory sort via zsh array flags `(o)`/`(O)`/`(on)`; `-k N` sorts by Nth field, split on whitespace or on `-t`'s delimiter |
-| `uniq`   | —                    | removes consecutive duplicate lines |
-| `cut`    | `-d DELIM` `-f RANGE` `-c N[-M]` | field ranges (`1-3`, `2,4`); `-c` for character positions |
-| `tr`      | `-d`                 | reads from stdin (`< file`); `a-z`/`A-Z` ranges use `${(U)}`/`${(L)}` |
-| `date`    | `+FORMAT`            | uses `strftime` from `zsh/datetime`; always uses the browser's local timezone (Emscripten's `localtime` delegates to JS `Date`); `%z` outputs the correct UTC offset |
-| `basename`| suffix arg           | strips directory and optional suffix (`basename /a/b.txt .txt` → `b`) |
-| `dirname` | —                    | strips last component (`dirname /a/b` → `/a`; `dirname foo` → `.`) |
-| `rm`      | `-f` `-r`/`-rf`      | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
-| `tee`     | `-a`                 | reads all stdin, writes to file(s) and stdout |
-| `seq`     | `N`, `start N`, `start step N` | integer sequence; `seq 0 2 10` → `0 2 4 6 8 10` |
-| `mktemp`  | `-d`, template       | creates temp file or dir; replaces trailing `X`'s with random digits |
-| `sleep`   | seconds (float)      | real sleep via `Atomics.wait()` in the Web Worker when `SharedArrayBuffer` is available (requires COOP+COEP headers); prints a stderr diagnostic and continues otherwise |
+| `rm`      | `-f` `-r`/`-rf`     | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
+| `ln`      | `-s`, `-f`          | symlinks via `zf_ln -s`; hard links are not supported in MEMFS |
+| `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1. Richer than sbase's grep, which has no `-r`, `-o`, `-m` or context lines |
 | `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
-| `xargs`   | `-I STR`, `-n N`     | reads stdin; default collects all items into one call; `-I` replaces per-line; `-n` batches |
-| `env`     | `VAR=val`, `-u VAR`  | prints environment or runs command with modified env; `-i` (clear env) silently ignored |
-| `printenv`| `[VAR ...]`          | prints value of named variables, or all exported variables |
-| `which`   | —                    | identifies commands as shell functions, builtins, or external; exits 1 if not found |
-| `realpath`| —                    | resolves absolute path using zsh's `:A` modifier |
-| `ln`      | `-s`, `-f`           | symlinks via `zf_ln -s`; hard links are not supported in MEMFS |
-| `base64`  | `-d`/`--decode`      | encode stdin to Base64 (76-char line wrap); decode Base64 to bytes |
+| `xargs`   | `-I STR`, `-n N`    | runs the command in this shell — a compiled xargs would need `exec()` |
+| `env`     | `VAR=val`, `-u VAR` | same reason as xargs; `-i` (clear env) silently ignored |
+| `which`   | —                   | knows about shell functions and builtins, which a PATH search does not |
+| `date`    | `+FORMAT`           | uses `strftime` from `zsh/datetime`; always uses the browser's local timezone (Emscripten's `localtime` delegates to JS `Date`); `%z` outputs the correct UTC offset |
+| `sleep`   | seconds (float)     | real sleep via `Atomics.wait()` in the Web Worker when `SharedArrayBuffer` is available (requires COOP+COEP headers); prints a stderr diagnostic and continues otherwise |
+| `realpath`| —                   | resolves absolute path using zsh's `:A` modifier; sbase has no realpath |
+| `base64`  | `-d`/`--decode`     | encode stdin to Base64 (76-char line wrap); decode Base64 to bytes; sbase has no base64 |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
 
-When built with `--with-sed`, `--with-awk`, and/or `--with-bc`, compiled-in builtins are also available:
-
-| Command | Flag      | Source    | Notes |
-|---------|-----------|-----------|-------|
-| `sed`   | `--with-sed` | OpenBSD sed | Full sed: `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space. File args, `<<< text` and pipes all work. |
-| `awk`   | `--with-awk` | one-true-awk (BWK) | Full awk: patterns, BEGIN/END, field splitting (`-F`), variables (`-v`), gsub/sub/split, printf. File args, `<<< data` and pipes all work. |
-| `bc`    | `--with-bc`  | Gavin Howard bc (BSD-2-Clause) | Arbitrary-precision math: `scale`, `sqrt()`, user-defined functions. `echo 'scale=2; 22/7' \| bc`, `bc <<< 'expr'` and heredocs all work. `dc` is also available. |
+Well-known unavailable commands (curl, git, python3, docker, …) emit a helpful
+stderr message and exit 127 without aborting the script.
 
 Known Limitations
 -----------------

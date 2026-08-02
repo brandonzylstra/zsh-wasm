@@ -46,7 +46,8 @@ Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.2.0/web/zsh
 in a browser. If it returns the file, the URL is live.
 
 **For future releases:** bump the `version` field in `npm/package.json`, run
-`bin/build --out npm/`, commit, tag, push. The tag drives the CDN URL, the npm
+`bin/build --with-sed --with-awk --with-bc --with-sbase --out npm/`, commit,
+tag, push. The tag drives the CDN URL, the npm
 publish (see Step 2b), and the npm version.
 
 ---

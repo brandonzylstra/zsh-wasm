@@ -60,21 +60,21 @@ run_sbase_tool(const char *name, char **args, int (*tool_main)(int, char **))
  * per-tool size cost in docs/PLAN.md was measured.
  */
 
-#ifdef SBASE_HAVE_WC
+#ifdef SBASE_HAVE_BASENAME
 /**/
 static int
-bin_sbase_wc(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+bin_sbase_basename(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
 {
-    return run_sbase_tool("wc", args, wc_main);
+    return run_sbase_tool("basename", args, basename_main);
 }
 #endif
 
-#ifdef SBASE_HAVE_SORT
+#ifdef SBASE_HAVE_CAT
 /**/
 static int
-bin_sbase_sort(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+bin_sbase_cat(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
 {
-    return run_sbase_tool("sort", args, sort_main);
+    return run_sbase_tool("cat", args, cat_main);
 }
 #endif
 
@@ -87,16 +87,160 @@ bin_sbase_cut(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int f
 }
 #endif
 
+#ifdef SBASE_HAVE_DIRNAME
+/**/
+static int
+bin_sbase_dirname(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("dirname", args, dirname_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_HEAD
+/**/
+static int
+bin_sbase_head(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("head", args, head_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_MKTEMP
+/**/
+static int
+bin_sbase_mktemp(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("mktemp", args, mktemp_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_PRINTENV
+/**/
+static int
+bin_sbase_printenv(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("printenv", args, printenv_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_SEQ
+/**/
+static int
+bin_sbase_seq(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("seq", args, seq_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_SORT
+/**/
+static int
+bin_sbase_sort(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("sort", args, sort_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_TAIL
+/**/
+static int
+bin_sbase_tail(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("tail", args, tail_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_TEE
+/**/
+static int
+bin_sbase_tee(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("tee", args, tee_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_TOUCH
+/**/
+static int
+bin_sbase_touch(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("touch", args, touch_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_TR
+/**/
+static int
+bin_sbase_tr(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("tr", args, tr_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_UNIQ
+/**/
+static int
+bin_sbase_uniq(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("uniq", args, uniq_main);
+}
+#endif
+
+#ifdef SBASE_HAVE_WC
+/**/
+static int
+bin_sbase_wc(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("wc", args, wc_main);
+}
+#endif
+
 /* Keep this table sorted by name -- zsh requires it. */
 static struct builtin bintab[] = {
+#ifdef SBASE_HAVE_BASENAME
+    BUILTIN("basename", 0, bin_sbase_basename, 0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_CAT
+    BUILTIN("cat",      0, bin_sbase_cat,      0, -1, 0, NULL, NULL),
+#endif
 #ifdef SBASE_HAVE_CUT
-    BUILTIN("cut",  0, bin_sbase_cut,  0, -1, 0, NULL, NULL),
+    BUILTIN("cut",      0, bin_sbase_cut,      0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_DIRNAME
+    BUILTIN("dirname",  0, bin_sbase_dirname,  0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_HEAD
+    BUILTIN("head",     0, bin_sbase_head,     0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_MKTEMP
+    BUILTIN("mktemp",   0, bin_sbase_mktemp,   0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_PRINTENV
+    BUILTIN("printenv", 0, bin_sbase_printenv, 0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_SEQ
+    BUILTIN("seq",      0, bin_sbase_seq,      0, -1, 0, NULL, NULL),
 #endif
 #ifdef SBASE_HAVE_SORT
-    BUILTIN("sort", 0, bin_sbase_sort, 0, -1, 0, NULL, NULL),
+    BUILTIN("sort",     0, bin_sbase_sort,     0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_TAIL
+    BUILTIN("tail",     0, bin_sbase_tail,     0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_TEE
+    BUILTIN("tee",      0, bin_sbase_tee,      0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_TOUCH
+    BUILTIN("touch",    0, bin_sbase_touch,    0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_TR
+    BUILTIN("tr",       0, bin_sbase_tr,       0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_UNIQ
+    BUILTIN("uniq",     0, bin_sbase_uniq,     0, -1, 0, NULL, NULL),
 #endif
 #ifdef SBASE_HAVE_WC
-    BUILTIN("wc",   0, bin_sbase_wc,   0, -1, 0, NULL, NULL),
+    BUILTIN("wc",       0, bin_sbase_wc,       0, -1, 0, NULL, NULL),
 #endif
 };
 
