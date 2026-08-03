@@ -5362,6 +5362,26 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
       return ret;
     };
   
+  
+  function _fd_pread(fd, iov, iovcnt, offset, pnum) {
+    offset = bigintToI53Checked(offset);
+  
+  
+  try {
+  
+      if (isNaN(offset)) return 22;
+      var stream = SYSCALLS.getStreamFromFD(fd)
+      var num = doReadv(stream, iov, iovcnt, offset);
+      HEAPU32[((pnum)>>2)] = num;
+      return 0;
+    } catch (e) {
+    if (typeof FS == 'undefined' || !(e.name === 'ErrnoError')) throw e;
+    return e.errno;
+  }
+  ;
+  }
+
+  
   function _fd_read(fd, iov, iovcnt, pnum) {
   try {
   
@@ -6385,6 +6405,8 @@ var wasmImports = {
   fd_close: _fd_close,
   /** @export */
   fd_fdstat_get: _fd_fdstat_get,
+  /** @export */
+  fd_pread: _fd_pread,
   /** @export */
   fd_read: _fd_read,
   /** @export */

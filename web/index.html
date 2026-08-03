@@ -465,6 +465,14 @@
     </div>
 
     <div class="example">
+        <div class="example-header">diff — Compare Files</div>
+        <div class="example-body">
+            <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-diff"></pre></div>
+            <div class="pane"><div class="pane-label">Output</div><pre class="output" id="out-diff"></pre></div>
+        </div>
+    </div>
+
+    <div class="example">
         <div class="example-header">xargs</div>
         <div class="example-body">
             <div class="pane"><div class="pane-label">Script</div><pre class="code" id="src-xargs"></pre></div>
@@ -911,6 +919,33 @@ printf 'hello world\nfoo bar\n' > /tmp/xf1.txt
 printf 'hello zsh\nbaz qux\n' > /tmp/xf2.txt
 printf '/tmp/xf1.txt\n/tmp/xf2.txt\n' > /tmp/files.txt
 xargs grep 'hello' < /tmp/files.txt
+</script>
+
+<script type="text/zsh" data-id="diff" data-stdout="#out-diff" data-stderr="#out-diff">
+printf 'one\ntwo\nthree\nfour\n' > /tmp/before.txt
+printf 'one\n2\nthree\nfour\nfive\n' > /tmp/after.txt
+
+echo "=== default: an ed-style summary ==="
+diff /tmp/before.txt /tmp/after.txt
+
+echo "=== -u: unified, the format patch(1) reads ==="
+# -L names the sides.  Without it diff stamps each header with the file's
+# modification time, which in a filesystem built fresh per run is always 'now'.
+diff -u -L before -L after /tmp/before.txt /tmp/after.txt
+
+echo "=== -q: just say whether they differ ==="
+diff -q /tmp/before.txt /tmp/after.txt
+
+echo "=== identical files say nothing, and exit 0 ==="
+diff /tmp/before.txt /tmp/before.txt
+echo "exit $?"
+
+echo "=== -r walks two directories ==="
+mkdir -p /tmp/v1 /tmp/v2
+printf 'shared\n' > /tmp/v1/same.txt   ; printf 'shared\n' > /tmp/v2/same.txt
+printf 'old\n'    > /tmp/v1/changed.txt; printf 'new\n'    > /tmp/v2/changed.txt
+printf 'gone\n'   > /tmp/v1/removed.txt
+diff -r /tmp/v1 /tmp/v2
 </script>
 
 <script type="text/zsh" data-id="utils" data-stdout="#out-utils" data-stderr="#out-utils">

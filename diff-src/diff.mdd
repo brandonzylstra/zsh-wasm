@@ -1,0 +1,7 @@
+name=zsh/diff
+link=dynamic
+load=no
+
+autofeatures="b:diff"
+
+objects=""

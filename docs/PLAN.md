@@ -444,23 +444,54 @@ find() {
 
 ---
 
-5. Compiled diff (--with-diff)
-------------------------------
+5. Compiled diff ✓ done
+------------------------
 
-**Status:** Possible. Not yet started. Lower priority than grep/bc.
+**Status:** Complete (2026-08-03). OpenBSD diff, as this section always planned,
+compiled in under `--with-diff` and part of the shipped build. `+29.8 KB`.
 
-**Source:** OpenBSD diff. ~4 KLOC of C, BSD license. Reads two files and
-outputs a unified or context diff.
+All the output formats come with it: the default `2c2` form, `-u`/`-U num`,
+`-c`/`-C num`, `-e` (an ed script), `-f`, `-n` (RCS), `-q`, and `-D` for
+`#ifdef` merges. So do the flags that decide what counts as a difference
+(`-b -d -i -p -t -T -w`), the directory ones (`-r -N -P -s -S -x -X`), and
+`-L label`.
+
+**The bug worth remembering.** `set_argstr()` sizes its buffer with
+`4 + *ave - *av + 1` — the address of the last argument string minus the address
+of the first. That is the combined length of the arguments only because a
+process is handed them in one contiguous block. A zsh builtin gets its arguments
+from the shell's allocator, so the difference came out negative and `xmalloc()`
+was asked for 4 GB: **every** two-file diff failed before a single line was
+compared. It is the kind of assumption that only shows up once the program stops
+being a process, and there is no reason to expect it to be the last one.
+
+Everything else was the usual embedding work — `err()` and `exit()` rerouted to
+a longjmp, file-scope state reset per call, `xmalloc` renamed away from
+one-true-awk's, `file[]` made private because zsh has a global by that name.
+All of it is in `diff-src/PATCHES.md`.
+
+**Licensing needs a decision from Brandon.** `diffreg.c` is under Caldera
+International's 4-clause BSD, and clause 3 is an advertising clause — still
+live, unlike Berkeley's, which was rescinded in 1999. It binds advertising
+material rather than the software or its docs, and OpenBSD, FreeBSD and NetBSD
+have all shipped `diff` under it for twenty years. `diff-src/LICENSE` sets out
+the wording and the reading. Building without `--with-diff` avoids it entirely,
+which is the fallback if the term is unwelcome.
 
 **Checklist:**
-- [ ] (same embedding checklist as grep/sed/bc)
-- [ ] Confirm `diff /tmp/a.txt /tmp/b.txt` produces correct unified output
-- [ ] Add tests: identical files, insertions, deletions
-- [ ] Update README/ROADMAP
+- [x] Vendor OpenBSD diff into `diff-src/`
+- [x] `err()`/`errx()`/`warn()`/`warnc()`/`exit()` → longjmp landing pad
+- [x] `diff_reset_state()` and `diffreg_reset_state()` for the per-call statics
+- [x] `diff_mod.c`, `diff.mdd`, `--with-diff` in `bin/build`
+- [x] Confirm `diff -u a b` produces correct unified output
+- [x] Tests: identical files, insertions, deletions, changes, `-u`, `-c`, `-e`,
+      `-q`, `-i`, `-w`, `-r`, stdin, pipelines, missing file, re-entrancy
+- [x] Update README, `CLAUDE.md`, `docs/CODECOMPARED.md`, `diff-src/PATCHES.md`
+- [ ] Brandon to accept or decline the Caldera advertising clause
 
-**Obstacles:** diff uses `tmp` files internally for some diff algorithms.
-Emscripten's memfs supports temp file creation. The main risk is memory
-allocation for large file diffs, which is not a concern for typical script use.
+**Obstacles that did not materialise:** the temp files diff uses for
+non-seekable input work fine on MEMFS, and memory was never a concern at the
+sizes a cheatsheet example uses.
 
 ---
 
@@ -971,7 +1002,7 @@ Priority Order Summary
 | 2   | Compiled grep              | done      | sbase's, BRE by default; `-E` for extended        |
 | 3   | Compiled bc                | done      |                                                  |
 | 4   | find shim                  | done      |                                                  |
-| 5   | Compiled diff              | open      | low priority; nothing depends on it               |
+| 5   | Compiled diff              | done      | OpenBSD's; check `diff-src/LICENSE` before shipping |
 | 6   | Pipelines without fork()   | done      | the big one                                       |
 | 6b  | Compiled tools re-entrant  | done      |                                                  |
 | 6d  | Compiled coreutils (sbase) | done      | 17 tools; `find` is the one shim left of the set  |

@@ -255,7 +255,7 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-333 test cases pass (335 total; 2 `knownFail`, documenting subshell variable
+351 test cases pass (353 total; 2 `knownFail`, documenting subshell variable
 isolation and MEMFS's lack of hard links). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
@@ -266,6 +266,8 @@ cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
 `-F` separator, multi-file), `zsh/mathfunc` (sin, cos, sqrt, log, etc.),
 basename/dirname path manipulation, rm/rmdir, tee, grep/cat/wc from stdin,
+diff (default, unified and context formats, ed and RCS scripts, -q, -i, -w,
+recursive directory compare, stdin, exit statuses),
 seq, mktemp, sleep, find (`-name`/`-type`/`-maxdepth`/`-newer`), env/printenv, sort `-k` field sort, cut `-c` character positions, which, realpath, ln, base64/base64 -d, head/tail `-c` byte-count mode, string operations (length, slice, replace, strip-prefix/suffix,
 `${var:-default}`, upper/lower case), brace expansion, array/associative-array
 operations, file-test operators (`-f`/`-d`), append redirect, logical operators,
@@ -301,7 +303,7 @@ bin/build
 
 ```
 bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
-          [--with-sbase]
+          [--with-sbase] [--with-diff]
 
   --debug      Compile with -O0 -g instead of -Os, and link with
                -sASSERTIONS=1 -gsource-map. Produces a larger build with
@@ -323,10 +325,13 @@ bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
                into the wasm binary as builtins, replacing their zsh-function
                shims. Requires sbase-src/ (included in this repo).
                Set SBASE_TOOLS to build a subset.
+  --with-diff  Compile OpenBSD diff into the wasm binary as a `diff` builtin
+               (~30 KB increase). Requires diff-src/ in the project root
+               (included in this repo).
 
 The published build is:
 
-  bin/build --with-sed --with-awk --with-bc --with-sbase
+  bin/build --with-sed --with-awk --with-bc --with-sbase --with-diff
 ```
 
 JS modules
@@ -451,11 +456,18 @@ error messages and all.
 | `ls`      | sbase | `-1 -A -a -c -d -F -f -H -h -i -L -l -n -p -q -R -r -U -u`; symlink targets, real file types |
 | `basename` / `dirname` | sbase | suffix stripping; POSIX path rules |
 | `printenv` | sbase | `[var ...]` |
+| `diff`  | OpenBSD diff | default, `-c`/`-u` (with `-C`/`-U num`), `-e`, `-f`, `-n`, `-q`, `-D`; `-b -d -i -p -t -T -w` for how lines are compared; `-r -N -P -s -S -x -X` for directories; `-L label` |
 | `grep`  | sbase | `-E -F -H -R -c -h -i -l -n -o -q -r -s -v -w -x` `-e PAT` `-f FILE` `-m N` `-A`/`-B`/`-C N`. **Patterns are BRE unless `-E`**, as in every real grep |
 
-The sbase tools (suckless, MIT) are vendored in `sbase-src/`; every change made
-to them for embedding is listed in `sbase-src/PATCHES.md`. Build them with
-`--with-sbase`; sed, awk and bc have their own flags.
+The sbase tools (suckless, MIT) are vendored in `sbase-src/` and OpenBSD diff in
+`diff-src/`; every change made to either for embedding is listed in the
+`PATCHES.md` beside it. Build them with `--with-sbase` and `--with-diff`; sed,
+awk and bc have their own flags.
+
+`diff -u` and `diff -c` stamp their headers with each file's modification time,
+as real diff does. The virtual filesystem is built fresh on every run, so those
+timestamps are always "now" — pass `-L old -L new` when the output has to be
+stable.
 
 #### zsh function shims
 
@@ -528,4 +540,24 @@ Known Limitations
 License
 -------
 
-[The Zsh License](https://github.com/zsh-users/zsh/blob/master/LICENCE).
+zsh-wasm itself is under [the Zsh License](https://github.com/zsh-users/zsh/blob/master/LICENCE),
+as is the interpreter it is built from. The tools compiled into the binary keep
+their own:
+
+| Component        | Source                              | License                                        |
+| ---------------- | ----------------------------------- | ---------------------------------------------- |
+| zsh 5.9          | zsh-users                           | Zsh License                                    |
+| `sed`            | OpenBSD sed                         | 3-clause BSD                                   |
+| `awk`            | one-true-awk (BWK)                  | MIT-style (Lucent)                             |
+| `bc`, `dc`       | Gavin Howard bc                     | 2-clause BSD                                   |
+| 17 coreutils     | sbase (suckless)                    | MIT — `sbase-src/LICENSE`                      |
+| `diff`           | OpenBSD diff                        | mixed — `diff-src/LICENSE`                     |
+
+One of those is worth a second look before you build a product on it:
+`diff-src/diffreg.c` is under Caldera International's 4-clause BSD, whose
+clause 3 requires that advertising material mentioning the software's features
+carry an acknowledgement. It binds advertising, not the software or its
+documentation, and it is the same term OpenBSD, FreeBSD and NetBSD have shipped
+`diff` under for two decades — but it is a live clause, unlike Berkeley's, which
+was rescinded in 1999. `diff-src/LICENSE` has the wording. Building without
+`--with-diff` leaves it out entirely.

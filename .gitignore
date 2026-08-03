@@ -3,6 +3,7 @@ build-sed/
 build-bc/
 build-sbase/
 build-awk/
+build-diff/
 zsh-5.9/
 zsh-5.9.tar.xz
 bc-7.0.3/

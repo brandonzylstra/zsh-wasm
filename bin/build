@@ -2,7 +2,7 @@
 # Rebuilds zsh.wasm from the configured build-zsh/ tree and deploys it.
 #
 # Usage: bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
-#                  [--with-sbase]
+#                  [--with-sbase] [--with-diff]
 #
 #   --debug      Compile with -O0 -g instead of -Os, and link with
 #                -sASSERTIONS=1 -gsource-map. Produces a larger build with
@@ -15,9 +15,11 @@
 #                (~150–200 KB increase). Requires awk-src/ in the project root.
 #   --with-bc    Compile Gavin Howard bc into the wasm binary as a `bc` builtin
 #                (~60–100 KB increase). Requires bc-src/ in the project root.
-#   --with-sbase Compile sbase (suckless, MIT) wc/sort/cut into the wasm binary
-#                as builtins, replacing three of the zsh-function shims.
+#   --with-sbase Compile sbase (suckless, MIT) coreutils into the wasm binary
+#                as builtins, replacing their zsh-function shims.
 #                Requires sbase-src/. See docs/PLAN.md item 6d.
+#   --with-diff  Compile OpenBSD diff into the wasm binary as a `diff` builtin
+#                (~30 KB increase). Requires diff-src/. See docs/PLAN.md item 5.
 #
 # Prerequisites (one-time setup — see README):
 #   1. zsh-5.9/ source directory
@@ -39,6 +41,7 @@ WITH_SED=0
 WITH_AWK=0
 WITH_BC=0
 WITH_SBASE=0
+WITH_DIFF=0
 
 while (( $# )); do
     case $1 in
@@ -47,6 +50,7 @@ while (( $# )); do
         --with-awk)   WITH_AWK=1 ;;
         --with-bc)    WITH_BC=1 ;;
         --with-sbase) WITH_SBASE=1 ;;
+        --with-diff)  WITH_DIFF=1 ;;
         --out)      shift; OUT_DIR=$1 ;;
         --out=*)    OUT_DIR=${1#--out=} ;;
         *)          echo "Unknown option: $1" >&2; exit 1 ;;
@@ -89,6 +93,8 @@ sed -i '' -E \
     -e 's/^(name=zsh\/bc .*)load=yes/\1load=no/' \
     -e 's/^(name=zsh\/sbase .*)link=static/\1link=no/' \
     -e 's/^(name=zsh\/sbase .*)load=yes/\1load=no/' \
+    -e 's/^(name=zsh\/diff .*)link=static/\1link=no/' \
+    -e 's/^(name=zsh\/diff .*)load=yes/\1load=no/' \
     config.modules
 
 # Compile and enable zsh/sed if requested.
@@ -665,12 +671,133 @@ MDH
     SBASE_LDFLAGS="$SBASE_BUILD/sbase_mod.o ${SBASE_TOOL_OBJS[*]} $SBASE_BUILD/libsbase.a"
 fi
 
+DIFF_CFLAGS=""
+DIFF_LDFLAGS=""
+DIFF_SRC="$ROOT/diff-src"
+DIFF_BUILD="$ROOT/build-diff"
+if (( WITH_DIFF )); then
+    echo "==> enabling zsh/diff"
+
+    cp "$DIFF_SRC/diff.mdd" "$ROOT/zsh-5.9/Src/Modules/diff.mdd"
+
+    if ! grep -q '^name=zsh/diff ' config.modules; then
+        python3 -c "
+lines = open('config.modules').readlines()
+out = []
+for line in lines:
+    out.append(line)
+    if line.startswith('name=zsh/net/socket '):
+        out.append('name=zsh/diff modfile=Src/Modules/diff.mdd link=no auto=yes load=no\n')
+open('config.modules', 'w').write(''.join(out))
+"
+    fi
+    sed -i '' -E \
+        -e 's/^(name=zsh\/diff .*)link=no/\1link=static/' \
+        -e 's/^(name=zsh\/diff .*)load=no/\1load=yes/' \
+        config.modules
+
+    if [[ ! -f "$BUILD/Src/Modules/diff.epro" ]]; then
+        cat > "$BUILD/Src/Modules/diff.epro" <<'EPRO'
+/* Generated automatically */
+#ifndef have_Src_Modules_diff_globals
+#define have_Src_Modules_diff_globals
+
+extern int setup_ _((UNUSED(Module m)));
+extern int features_ _((Module m,char***features));
+extern int enables_ _((Module m,int**enables));
+extern int boot_ _((UNUSED(Module m)));
+extern int cleanup_ _((Module m));
+extern int finish_ _((UNUSED(Module m)));
+
+#endif /* !have_Src_Modules_diff_globals */
+EPRO
+    fi
+    if [[ ! -f "$BUILD/Src/Modules/diff.mdh" ]]; then
+        cat > "$BUILD/Src/Modules/diff.mdh" <<'MDH'
+#ifndef have_zshQsdiff_module
+#define have_zshQsdiff_module
+
+# ifndef IMPORTING_MODULE_zshQsdiff
+#   define boot_ boot_zshQsdiff
+#   define cleanup_ cleanup_zshQsdiff
+#   define features_ features_zshQsdiff
+#   define enables_ enables_zshQsdiff
+#   define setup_ setup_zshQsdiff
+#   define finish_ finish_zshQsdiff
+# endif /* !IMPORTING_MODULE_zshQsdiff */
+
+/* Module dependencies */
+# define IMPORTING_MODULE_zshQsmain 1
+# include "../../Src/zsh.mdh"
+
+# undef mod_import_variable
+# undef mod_import_function
+# if defined(IMPORTING_MODULE_zshQsdiff) &&  defined(MODULE)
+#  define mod_import_variable
+#  define mod_import_function
+# else
+#  define mod_import_function
+#  define mod_import_variable
+# endif /* IMPORTING_MODULE_zshQsdiff && MODULE */
+# include "diff.epro"
+# undef mod_import_variable
+# define mod_import_variable
+# undef mod_import_variable
+# define mod_import_variable
+# ifndef mod_export
+#  define mod_export
+# endif /* mod_export */
+
+#endif /* !have_zshQsdiff_module */
+MDH
+    fi
+
+    mkdir -p "$DIFF_BUILD"
+
+    echo "==> compiling diff-src/"
+    # diff.c keeps its main(); rename it at compile time rather than editing
+    # the source, the same way the sbase tools are handled.
+    # xmalloc and friends are also defined by one-true-awk, which is linked
+    # into the same binary.  Rename diff's at compile time, the same way the
+    # sbase and awk objects rename theirs.
+    DIFF_RENAME="-Dxmalloc=diff_xmalloc -Dxcalloc=diff_xcalloc \
+        -Dxreallocarray=diff_xreallocarray -Dxstrdup=diff_xstrdup \
+        -Dxasprintf=diff_xasprintf"
+
+    DIFF_OBJS=()
+    for name in diff diffreg diffdir xmalloc diff_embed; do
+        RENAME="$DIFF_RENAME"
+        [[ $name == diff ]] && RENAME="$RENAME -Dmain=diff_main"
+        emcc $BUILD_CFLAGS -c "$DIFF_SRC/$name.c" \
+            -o "$DIFF_BUILD/$name.o" \
+            -I"$DIFF_SRC" \
+            $RENAME
+        DIFF_OBJS+=("$DIFF_BUILD/$name.o")
+    done
+
+    echo "==> compiling zsh/diff module glue"
+    emcc $BUILD_CFLAGS -c "$DIFF_SRC/diff_mod.c" \
+        -o "$DIFF_BUILD/diff_mod.o" \
+        -I"$BUILD/Src/Modules" \
+        -I"$BUILD/Src" \
+        -I"$ROOT/zsh-5.9/Src" \
+        -I"$ROOT/zsh-5.9/Src/Zle" \
+        -I"$ROOT/zsh-5.9/Src/Modules" \
+        -I"$STUB/include" \
+        -I"$DIFF_SRC" \
+        -I"$ROOT/embed" \
+        -DHAVE_CONFIG_H
+
+    DIFF_CFLAGS="-I$DIFF_SRC"
+    DIFF_LDFLAGS="$DIFF_BUILD/diff_mod.o ${DIFF_OBJS[*]}"
+fi
+
 echo "==> patching config.h"
 "$ROOT/bin/patch-config"
 
 echo "==> building"
 emmake make \
-    CFLAGS="$BUILD_CFLAGS $SED_CFLAGS $AWK_CFLAGS $BC_CFLAGS $SBASE_CFLAGS" \
+    CFLAGS="$BUILD_CFLAGS $SED_CFLAGS $AWK_CFLAGS $BC_CFLAGS $SBASE_CFLAGS $DIFF_CFLAGS" \
     LDFLAGS="-L$STUB/lib \
         -sFORCE_FILESYSTEM=1 \
         -sEXPORTED_RUNTIME_METHODS=FS,callMain,IDBFS \
@@ -681,7 +808,8 @@ emmake make \
         $SED_LDFLAGS \
         $AWK_LDFLAGS \
         $BC_LDFLAGS \
-        $SBASE_LDFLAGS"
+        $SBASE_LDFLAGS \
+        $DIFF_LDFLAGS"
 
 echo "==> deploying to $OUT_DIR"
 mkdir -p "$OUT_DIR"

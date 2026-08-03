@@ -98,16 +98,19 @@ breaks `zsh-runtime.js` at parse time. Quote shell snippets in comments with
 'single quotes'. `bin/run-script --preamble` imports the module, so it fails
 loudly on this; a Playwright run just hangs with zero tests completed.
 
-`sed`, `awk`, and `bc` are compiled directly into the WASM binary (not shims)
-via `bin/build --with-sed --with-awk --with-bc`, and seventeen sbase tools (`wc`,
+`sed`, `awk`, `bc` and `diff` are compiled directly into the WASM binary (not
+shims) via `bin/build --with-sed --with-awk --with-bc --with-diff`, and
+seventeen sbase tools (`wc`,
 `sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`,
 `mktemp`, `ls`, `basename`, `dirname`, `printenv`, `grep`) via `--with-sbase`. The published
 package includes all of them, so the shipped build command is:
 
-    bin/build --with-sed --with-awk --with-bc --with-sbase
+    bin/build --with-sed --with-awk --with-bc --with-sbase --with-diff
 
-sbase sources are vendored in `sbase-src/`; `sbase-src/PATCHES.md` lists every
-change made to them for embedding, and is what makes a re-vendor tractable.
+sbase sources are vendored in `sbase-src/`, OpenBSD diff in `diff-src/`; the
+`PATCHES.md` in each lists every change made for embedding, and is what makes a
+re-vendor tractable. `diff-src/LICENSE` is worth reading once: `diffreg.c` is
+under Caldera's 4-clause BSD, which still has an advertising clause.
 
 Because they are builtins rather than processes, every call in a script shares
 one set of globals and one `stdin` FILE. Anything a tool leaves behind must be
@@ -122,7 +125,7 @@ Building
 ```zsh
 # Prerequisites: Emscripten, zsh-5.9 source at ./zsh-5.9/
 ./bin/build                          # slim build
-./bin/build --with-sed --with-awk --with-bc --with-sbase   # what ships
+./bin/build --with-sed --with-awk --with-bc --with-sbase --with-diff   # what ships
 ./bin/build --out npm/               # build and copy to npm/ for publishing
 
 # Test (requires HTTP server — file:// triggers CORS errors)
