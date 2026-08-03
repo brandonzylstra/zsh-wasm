@@ -28,21 +28,21 @@ URLs exist and permanent caching is unsafe.
 Step 1: Push a Version Tag
 --------------------------
 
-The npm package is at `0.4.0`. Tag the current commit to match:
+The npm package is at `0.5.0`. Tag the current commit to match:
 
 ```zsh
-git tag v0.4.0
-git push origin v0.4.0
+git tag v0.5.0
+git push origin v0.5.0
 ```
 
 That's all jsDelivr needs. Within minutes the following URL becomes active and permanent:
 
 ```
-https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js
-https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.wasm
+https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.5.0/web/zsh.js
+https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.5.0/web/zsh.wasm
 ```
 
-Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js`
+Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.5.0/web/zsh.js`
 in a browser. If it returns the file, the URL is live.
 
 **For future releases:** bump the `version` field in `npm/package.json`, run
@@ -217,7 +217,8 @@ remembers the `hasPipelineOp()` guard first.
 The preamble is still needed and still vendored, but it is half the size it was:
 `wc`, `sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`,
 `mktemp`, `ls`, `basename`, `dirname` and `printenv` became compiled builtins in
-0.3.0, and `grep` in 0.4.0, alongside `sed`, `awk` and `bc`. What is left in the
+0.3.0, `grep` in 0.4.0 and `diff` in 0.5.0, alongside `sed`, `awk` and `bc`.
+What is left in the
 preamble is the set a zsh function still does better — `cp`, `mv`, `rm`, `find`,
 `xargs` and friends — and those are what the pipeline stages run.
 
@@ -238,7 +239,7 @@ headScripts: ['<script src="https://brandonzylstra.github.io/zsh-wasm/zsh.js"></
 
 // to:
 offlineCapable: true,
-headScripts: ['<script src="https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js"></script>'],
+headScripts: ['<script src="https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.5.0/web/zsh.js"></script>'],
 ```
 
 The mutable GitHub Pages URL becomes the pinned jsDelivr URL. Both serve the same file,
@@ -251,11 +252,11 @@ but only the jsDelivr URL is safe to cache permanently.
   slug:    'zsh',
   name:    'Zsh',
   color:   '#89e051',
-  version: '0.4.0',
+  version: '0.5.0',
   pageUrl: groupPageUrl('zsh'), // resolves to /ruby/zsh/ on the Ruby anchor
   cdnUrls: [
-    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js',
-    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.wasm',
+    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.5.0/web/zsh.js',
+    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.5.0/web/zsh.wasm',
   ],
 },
 ```
@@ -274,7 +275,7 @@ navigates to the Zsh page. Both files should be listed.
 ### 3c. `public/sw.js` — add to `LANGUAGE_RUNTIME_CACHES`
 
 ```js
-zsh: 'codecompared-zsh-runtime-0.4.0',
+zsh: 'codecompared-zsh-runtime-0.5.0',
 ```
 
 This must stay in sync with the `version` field in the `CACHE_GROUPS` entry above.
@@ -315,7 +316,7 @@ Current Blocking Issues (as of 2026-08-03)
 
 | Issue                                  | Status                             | Fix                                                                       |
 | -------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| `v0.3.1` and `v0.4.0` tagged, not pushed | Blocks the CDN URL above         | `git push origin main --follow-tags` (`v0.3.0` is the newest tag on the remote) |
+| `v0.3.1`, `v0.4.0`, `v0.5.0` tagged, not pushed | Blocks the CDN URL above  | `git push origin main --follow-tags` (`v0.3.0` is the newest tag on the remote) |
 | No release workflow                    | Reduces release visibility         | Add `release.yml` (optional; `publish-npm.yaml` already publishes on tag) |
 | GitHub Pages URL in `lib/languages.js` | Mutable, unsafe to cache           | Swap after tag is live                                                    |
 | `offlineCapable` not set               | Zsh absent from offline modal      | Set after CDN URL is in place                                             |
@@ -328,6 +329,10 @@ All are resolved by the steps above, in order.
 a tag went up — so CodeCompared is still on the mutable GitHub Pages URL and
 crosses the `simulatePipes()` break in the same move.
 
-`v0.3.1` exists as the smaller step: it is `0.3.0` plus the compiled `ls`, with
-no behavior change to move to. Take it instead of `0.4.0` if the grep examples
-cannot be updated yet.
+Three tags are waiting, and they are deliberately separable:
+
+- **`v0.3.1`** — `0.3.0` plus the compiled `ls`. No behavior changes; safe to
+  take on its own if the grep examples cannot be updated yet.
+- **`v0.4.0`** — the compiled `grep`, and with it the BRE change above. This is
+  the one that needs example review.
+- **`v0.5.0`** — adds the compiled `diff`. Purely additive on top of `0.4.0`.
