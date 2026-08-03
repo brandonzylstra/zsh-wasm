@@ -28,21 +28,21 @@ URLs exist and permanent caching is unsafe.
 Step 1: Push a Version Tag
 --------------------------
 
-The npm package is at `0.3.1`. Tag the current commit to match:
+The npm package is at `0.4.0`. Tag the current commit to match:
 
 ```zsh
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 That's all jsDelivr needs. Within minutes the following URL becomes active and permanent:
 
 ```
-https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js
-https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.wasm
+https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js
+https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.wasm
 ```
 
-Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js`
+Verify: open `https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js`
 in a browser. If it returns the file, the URL is live.
 
 **For future releases:** bump the `version` field in `npm/package.json`, run
@@ -168,6 +168,25 @@ you add the Step 2 release workflow) a GitHub Release.
 
 ---
 
+Breaking change in 0.4.0: grep patterns are BRE, not ERE
+--------------------------------------------------------
+
+Up to 0.3.1 the `grep` shim matched with zsh's `=~`, which is always extended
+regex. From 0.4.0 grep is a compiled builtin and reads basic regular expressions
+unless given `-E`, which is what GNU, BSD/macOS, busybox and toybox all do.
+
+Any Zsh example on the site using a bare `|`, `+`, `?` or `{n}` in a grep pattern
+changes meaning and needs `-E` added:
+
+```zsh
+grep 'apple|cherry' fruit.txt      # 0.3.1: matched both.  0.4.0: matches nothing
+grep -E 'apple|cherry' fruit.txt   # 0.4.0: matches both
+grep 'apple\|cherry' fruit.txt     # ... or the BRE spelling
+```
+
+Character classes, `.`, `*`, `^` and `$` are unaffected — they mean the same
+thing in both dialects, and most examples use nothing else.
+
 Breaking change in 0.2.0: simulatePipes() is gone
 -------------------------------------------------
 
@@ -219,7 +238,7 @@ headScripts: ['<script src="https://brandonzylstra.github.io/zsh-wasm/zsh.js"></
 
 // to:
 offlineCapable: true,
-headScripts: ['<script src="https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js"></script>'],
+headScripts: ['<script src="https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js"></script>'],
 ```
 
 The mutable GitHub Pages URL becomes the pinned jsDelivr URL. Both serve the same file,
@@ -232,11 +251,11 @@ but only the jsDelivr URL is safe to cache permanently.
   slug:    'zsh',
   name:    'Zsh',
   color:   '#89e051',
-  version: '0.3.1',
+  version: '0.4.0',
   pageUrl: groupPageUrl('zsh'), // resolves to /ruby/zsh/ on the Ruby anchor
   cdnUrls: [
-    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.js',
-    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.3.1/web/zsh.wasm',
+    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.js',
+    'https://cdn.jsdelivr.net/gh/brandonzylstra/zsh-wasm@v0.4.0/web/zsh.wasm',
   ],
 },
 ```
@@ -255,7 +274,7 @@ navigates to the Zsh page. Both files should be listed.
 ### 3c. `public/sw.js` — add to `LANGUAGE_RUNTIME_CACHES`
 
 ```js
-zsh: 'codecompared-zsh-runtime-0.3.1',
+zsh: 'codecompared-zsh-runtime-0.4.0',
 ```
 
 This must stay in sync with the `version` field in the `CACHE_GROUPS` entry above.
@@ -291,19 +310,24 @@ pick up the new runtime on their next page load.
 
 ---
 
-Current Blocking Issues (as of 2026-08-02)
+Current Blocking Issues (as of 2026-08-03)
 ------------------------------------------
 
 | Issue                                  | Status                             | Fix                                                                       |
 | -------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| `v0.3.1` not tagged or pushed          | Blocks the CDN URL above           | `git push origin main && git push origin v0.3.1` (`v0.3.0` is the newest tag) |
+| `v0.3.1` and `v0.4.0` tagged, not pushed | Blocks the CDN URL above         | `git push origin main --follow-tags` (`v0.3.0` is the newest tag on the remote) |
 | No release workflow                    | Reduces release visibility         | Add `release.yml` (optional; `publish-npm.yaml` already publishes on tag) |
 | GitHub Pages URL in `lib/languages.js` | Mutable, unsafe to cache           | Swap after tag is live                                                    |
 | `offlineCapable` not set               | Zsh absent from offline modal      | Set after CDN URL is in place                                             |
 | CodeCompared vendors `simulatePipes()` | Its fetch script throws on ≥ 0.2.0 | See "Breaking change in 0.2.0" above                                      |
+| grep examples using bare `\|` or `+`    | Change meaning on ≥ 0.4.0          | Add `-E`; see "Breaking change in 0.4.0" above                            |
 
 All are resolved by the steps above, in order.
 
 `v0.2.0` was never tagged — the pipeline work shipped and `0.3.0` followed before
 a tag went up — so CodeCompared is still on the mutable GitHub Pages URL and
 crosses the `simulatePipes()` break in the same move.
+
+`v0.3.1` exists as the smaller step: it is `0.3.0` plus the compiled `ls`, with
+no behavior change to move to. Take it instead of `0.4.0` if the grep examples
+cannot be updated yet.
