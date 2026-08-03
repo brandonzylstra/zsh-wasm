@@ -96,6 +96,15 @@ bin_sbase_dirname(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(i
 }
 #endif
 
+#ifdef SBASE_HAVE_GREP
+/**/
+static int
+bin_sbase_grep(UNUSED(char *name), char **args, UNUSED(Options ops), UNUSED(int func))
+{
+    return run_sbase_tool("grep", args, grep_main);
+}
+#endif
+
 #ifdef SBASE_HAVE_HEAD
 /**/
 static int
@@ -217,6 +226,9 @@ static struct builtin bintab[] = {
 #endif
 #ifdef SBASE_HAVE_DIRNAME
     BUILTIN("dirname",  0, bin_sbase_dirname,  0, -1, 0, NULL, NULL),
+#endif
+#ifdef SBASE_HAVE_GREP
+    BUILTIN("grep",     0, bin_sbase_grep,     0, -1, 0, NULL, NULL),
 #endif
 #ifdef SBASE_HAVE_HEAD
     BUILTIN("head",     0, bin_sbase_head,     0, -1, 0, NULL, NULL),

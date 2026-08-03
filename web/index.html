@@ -775,6 +775,16 @@ echo "---"
 grep -c 'a' /tmp/fruits.txt         # count matching lines
 echo "---"
 grep '^a' /tmp/fruits.txt           # anchored to start
+echo "---"
+# Patterns are basic regular expressions, as in every real grep, so a bare
+# '|' is an ordinary character and matches nothing here ...
+grep 'apple|Cherry' /tmp/fruits.txt ; echo "exit $? — no match without -E"
+echo "---"
+grep -E 'apple|Cherry' /tmp/fruits.txt   # ... -E asks for extended regex
+echo "---"
+grep 'apple\|Cherry' /tmp/fruits.txt     # ... or spell it the BRE way
+echo "---"
+grep -oE 'a[a-z]+t' /tmp/fruits.txt      # -o prints the match, not the line
 </script>
 
 <script type="text/zsh" data-id="text" data-stdout="#out-text" data-stderr="#out-text">

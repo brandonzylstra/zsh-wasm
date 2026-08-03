@@ -2,11 +2,11 @@ sbase-src — what was changed and why
 ====================================
 
 Vendored from [sbase](https://git.suckless.org/sbase) (suckless, MIT — see
-`LICENSE`), cloned 2026-08-01. Only the files needed by the sixteen tools we
-compile are here — basename, cat, cut, dirname, head, ls, mktemp, printenv,
-seq, sort, tail, tee, touch, tr, uniq, wc — plus the `libutil`/`libutf` members
-they reach. The hashes, the recursion helpers and the other 90-odd tools were left
-behind.
+`LICENSE`), cloned 2026-08-01, with `grep.c` taken from the same upstream on
+2026-08-02. Only the files needed by the seventeen tools we compile are here —
+basename, cat, cut, dirname, grep, head, ls, mktemp, printenv, seq, sort, tail,
+tee, touch, tr, uniq, wc — plus the `libutil`/`libutf` members they reach. The
+hashes, the recursion helpers and the other 90-odd tools were left behind.
 
 See `docs/PLAN.md` item 6d for why sbase and not BusyBox. Most changes below
 exist for one reason: sbase tools are written as *programs* — one per process,
@@ -54,8 +54,8 @@ Upstream has the same bug whenever stdout is not a terminal — piped
 Per-tool state resets
 ---------------------
 
-wc, sort, tail, uniq, tr, cut, touch and ls keep options and accumulators in
-file-scope statics, which a program initializes once. A builtin is entered
+wc, sort, tail, uniq, tr, cut, touch, ls and grep keep options and accumulators
+in file-scope statics, which a program initializes once. A builtin is entered
 repeatedly, so each grew a `reset_state()` called at the top of `main()`.
 Without it, `wc a; wc b` reports a running total, a second `cut` inherits the
 first one's ranges, and a second `uniq` compares its first line against the
@@ -84,6 +84,47 @@ head.c — add -c
 sbase's head takes only `-n`/`-NUM`. Both BSD's and GNU's take `-c num` for
 bytes, and so did the shim this replaces, along with its tests. Added as
 `head_bytes()`, selected by a flag, leaving the line path untouched.
+
+grep.c — four flags added, and -w/-x moved to compile time
+-----------------------------------------------------------
+
+The largest patch here, and the reason the shim survived as long as it did.
+sbase's grep has `-E -F -H -c -h -i -l -n -q -s -v -w -x -e -f`; the zsh function
+it replaces also had `-r`/`-R`, `-o`, `-m` and `-A`/`-B`/`-C`, and dropping those
+was not acceptable. Four additions:
+
+- **`-r`/`-R`.** A directory operand is walked with `opendir`/`readdir`. `-r`
+  follows a symlink only when it was named on the command line, `-R` follows
+  them anywhere, which is GNU's distinction. Entries are sorted before
+  descending: `readdir` order is whatever the filesystem hands back, and a
+  cheatsheet example has to print the same thing every time it runs. GNU does
+  not sort.
+- **`-o`.** Prints each match rather than the line. Needs the match offsets, so
+  `REG_NOSUB` is dropped from the compile flags when `-o` is given. Where two
+  patterns both match a line, the leftmost wins (longest on a tie) — upstream's
+  "first pattern that matches anywhere" is the right answer for a yes/no test
+  and the wrong one when the matched text is the output.
+- **`-m num`.** Stops after that many selected lines, per file.
+- **`-A`/`-B`/`-C num`.** Trailing context is a countdown, leading context a ring
+  buffer of the previous `-B` lines. A gap between groups prints `--`, and a
+  prefixed context line uses `-` where a matching line uses `:`, both as GNU
+  does. `-c`, `-l` and `-q` report about the file rather than its lines, so they
+  ignore context.
+
+`-w` and `-x` also moved. Upstream wraps the pattern in `\<\(...\)\>` or
+`^\(...\)$` inside `addpattern()`, which runs while the arguments are still
+being parsed — so `grep -e foo -w file` searches for a bare `foo`, the flag
+having arrived too late. The wrapping now happens in the compile pass after
+parsing, where it applies to `-e` and `-f` patterns regardless of order.
+
+Two embedding changes on top of those: a `reset_state()` that also frees the
+previous call's pattern list (otherwise the second grep in a script searches for
+the first one's pattern as well as its own), and `-q`, which upstream implements
+as a bare `exit(Match)` — fine in a program, fatal to the shell here. It now
+sets a flag that unwinds the file loop and returns.
+
+Still divergent: `-F` combined with `-w` does a plain substring search rather
+than a word-boundary one. Upstream has the same gap.
 
 uniq.c — BSD’s count column width
 ---------------------------------
@@ -118,6 +159,8 @@ Known divergences left alone
   behavior; BSD appends one. GNU's reading is the more useful of the two.
 - Column widths otherwise follow BSD, except `wc`, which stays unpadded — the
   deliberate project convention recorded in `docs/PLAN.md` 1d.
+- `grep -r` walks directories in sorted order rather than `readdir` order, so
+  that a script's output is reproducible.
 - `ls -l` shows owner and group as numeric `0`. Emscripten has no passwd
   database, so `getpwuid()` returns NULL and sbase falls back to the id, which
   is what `ls -n` prints. Inventing a name would be worse than showing the

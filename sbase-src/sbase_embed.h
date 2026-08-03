@@ -36,6 +36,7 @@ int basename_main(int argc, char *argv[]);
 int cat_main(int argc, char *argv[]);
 int cut_main(int argc, char *argv[]);
 int dirname_main(int argc, char *argv[]);
+int grep_main(int argc, char *argv[]);
 int head_main(int argc, char *argv[]);
 int ls_main(int argc, char *argv[]);
 int mktemp_main(int argc, char *argv[]);

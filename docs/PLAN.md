@@ -246,91 +246,57 @@ Tests: `errexit-shims`, `errexit-stdin-shims`, `errexit-pipeline`,
 
 ---
 
-2. Compiled grep (--with-grep)
-------------------------------
+2. Compiled grep ✓ done
+------------------------
 
-**Status:** Superseded by item 6d — take sbase's grep rather than porting
-OpenBSD's separately. The embedding work below is done once, in `sbase-src/`,
-for every tool at a time; the notes here are kept because the *capability* gaps
-they list (context lines, `-w`, `-l`, a real regex engine) are still the reason
-to want a compiled grep at all.
+**Status:** Complete (2026-08-02). sbase's grep, compiled in with the other
+sixteen tools under `--with-sbase`, not OpenBSD's under a flag of its own — the
+embedding work in `sbase-src/` was already done and is shared. `+6.9 KB` of
+wasm; `5.5 KB` off the preamble, which is now 12.1 KB, down 62% from the 32.1 KB
+it was before any of this started.
 
-**Original status:** Planned. The grep shim covers the most common cases but has hard
-limits: no `-A`/`-B`/`-C` context lines, no `-r`/`-R` recursive (already
-handled by zsh globs), no `-w` word-boundary, no `-l` list-filenames, no `-m`
-max-count, and the ERE implementation relies on zsh's `=~` which may differ
-subtly from a real POSIX regex engine.
+**The decision this waited on.** The shim matched with zsh's `=~`, which is
+always ERE, so `grep 'a|b'` matched either and `grep 'a+'` was a quantifier —
+neither of which is true of any real grep. Whether to keep that or move to POSIX
+BRE was a product decision (existing CodeCompared examples would change meaning),
+and it was put to Brandon on 2026-08-02 in these terms: *if no tool named grep
+defaults to ERE, switch; if some do, stay*. No tool named grep does — POSIX
+specifies BRE, and GNU, BSD/macOS, busybox and toybox all follow it, with ERE
+opt-in via `-E`/`egrep`. The modern replacements (ripgrep, ag, ack) default to
+ERE or richer, but none of them is named grep. So: **BRE by default, `-E` for
+extended**, as everywhere else.
 
-Compiling a real grep eliminates all of these. It also enables stdin reading
-natively (no shim workaround needed).
+Emscripten's regex is musl's, and it turns out to implement GNU's BRE dialect in
+full: `\<` and `\>` word boundaries, `\|`, `\+`, `\?`, `\{n,m\}` intervals and
+`\1` backreferences all work. That is what made the switch cheap — nothing had
+to be emulated.
 
-**Source:** OpenBSD grep. Clean POSIX C, BSD-2-Clause license, ~2.5 KLOC.
-Available at:
-- `https://github.com/clibs/grep` (mirror)
-- OpenBSD CVS: `src/usr.bin/grep/`
+**What changed for a script author.** Six tests moved to `-E` (`grep-plus`,
+`grep-optional`, `grep-braces`, `grep-alternation`, `grep-o`, `grep-wo`), and
+eight new ones pin the BRE reading down: a bare `|`, `+` and `{2}` are literals,
+`\|`, `\{2\}` and `\(ab\)\1` do what BRE says. Any CodeCompared example using
+bare `|` or `+` with grep needs `-E` added.
 
-OpenBSD grep files needed: `grep.c`, `grep.h`, `file.c`, `queue.c`,
-`util.c` + generated `ohcount` (~5 .c files total).
+**What was gained.** `-F` (fixed strings), `-x` (whole line), `-s` (no error for
+a missing file) and `-f` (patterns from a file), which the shim never had. Four
+flags had to be *added* to sbase to avoid losing them — `-r`/`-R`, `-o`, `-m`
+and `-A`/`-B`/`-C` — and `-w`/`-x` had to move from parse time to compile time so
+that `grep -e foo -w` works. All of it is written up in `sbase-src/PATCHES.md`,
+where it is comfortably the longest entry.
 
 **Checklist:**
-- [ ] Download OpenBSD grep source into `grep-src/`
-- [ ] Audit `grep.c` for `exit()` calls → replace with `longjmp`-based
-      `grep_do_exit()` (same pattern as `sed_do_exit()`)
-- [ ] Create `grep_embed.h` / `grep_embed.c` (reset globals between calls)
-- [ ] Create `grep_mod.c` (zsh builtin glue, same structure as `sed_mod.c`)
-- [ ] Create `grep-src/grep.mdd` (zsh module descriptor)
-- [ ] Add `--with-grep` flag to `bin/build`; compile grep objects and inject
-      via `LDFLAGS` at link time (same as sed/awk)
-- [ ] Add grep to the `config.modules` patching block
-- [ ] Write a `sed-src/grep.mdd` (or create a `grep.mdd` outside the zsh tree)
-- [ ] Rebuild wasm with `--with-grep`
-- [ ] Remove grep shim from `BUILTINS_PREAMBLE` (or keep it as a fallback for
-      builds without `--with-grep` — better)
-- [ ] Promote `grep-context` from `knownFail`; add tests for `-A`/`-B`/`-C`,
-      `-w`, `-l`, `-r` (if recursive makes sense in memfs)
-- [ ] Update README and ROADMAP
+- [x] Settle the BRE/ERE question before porting anything
+- [x] Vendor `sbase-src/grep.c` and add `-r`/`-R`, `-o`, `-m`, `-A`/`-B`/`-C`
+- [x] Fix `-w`/`-x` so they apply to `-e` and `-f` patterns whatever the order
+- [x] `reset_state()` including the pattern list; `-q` without `exit()`
+- [x] Add to `SBASE_TOOLS`, `sbase_embed.h` and `sbase_mod.c`
+- [x] Delete the grep shim and `_zw_split_lines` from `BUILTINS_PREAMBLE`
+- [x] Move the six ERE tests to `-E`; add eight BRE tests and nine flag tests
+- [x] Update README, `CLAUDE.md`, `docs/CODECOMPARED.md` and `PATCHES.md`
 
-**Key embedding changes (same pattern as sed):**
-
-```c
-// grep_embed.h
-jmp_buf grep_exit_jmp;
-int     grep_exit_code;
-void    grep_do_exit(int code);
-void    grep_full_reset(void);  // clear file list, stats, etc.
-int     grep_main(int argc, char **argv);
-
-// In grep.c: replace every exit(n) with grep_do_exit(n)
-// Add grep_full_reset() that zeroes all file-scope statics
-```
-
-```c
-// grep_mod.c
-static int bin_grep(char *name, char **args, Options ops, int func) {
-    // build argv[], call grep_main(), same as bin_sed / bin_awk
-    if (setjmp(grep_exit_jmp)) {
-        fflush(stdout);
-        return grep_exit_code;
-    }
-    int ret = grep_main(argc, argv);
-    fflush(stdout);
-    return ret;
-}
-```
-
-**Obstacles:**
-
-1. **stdin in wasm context**: OpenBSD grep reads from stdin for `-` or when no
-   files given. In the wasm worker, stdin is set up via `Module.stdin` callback
-   byte-by-byte. Grep's `fgetc(stdin)` should work, but needs testing.
-2. **`mmap`**: Some grep implementations use `mmap` for performance. Emscripten
-   supports `mmap` on its virtual filesystem, so this is likely fine.
-3. **Global state audit**: grep has file-level statics for match counts, options,
-   the compiled regex. All must be reset in `grep_full_reset()`.
-4. **`-r`/`-R` recursive**: Recursion uses `opendir`/`readdir`. These work in
-   Emscripten's memfs. Worth testing.
-
-**Size impact estimate:** ~30–50 KB added to wasm binary (similar to sed).
+**Known divergences:** `grep -r` walks a directory in sorted order rather than
+`readdir` order, so a script prints the same thing every run. `-F` with `-w` does
+a substring search rather than a word-boundary one, as upstream sbase does.
 
 ---
 
@@ -785,12 +751,12 @@ just taking sbase's). Keep `base64` and `realpath` as shims — sbase has no
 equivalent. Measure the wasm after each, and delete each shim only once its
 tests pass unchanged.
 
-### Ported (2026-08-01)
+### Ported (2026-08-01, plus grep on 2026-08-02)
 
-Sixteen tools compiled in and their shims deleted: `wc`, `sort`, `cut`, `head`,
+Seventeen tools compiled in and their shims deleted: `wc`, `sort`, `cut`, `head`,
 `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`, `mktemp`, `ls`, `basename`,
-`dirname`, `printenv`. `bin/build --with-sbase` is now part of the shipped
-build.
+`dirname`, `printenv`, `grep`. `bin/build --with-sbase` is now part of the
+shipped build.
 
 | | before | after |
 | --- | --- | --- |
@@ -818,13 +784,14 @@ having been wrong:
   a terminal. Fixed once in `writeall()`.
 
 Everything else matched BSD's own tools byte for byte across 30-odd compared
-cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
+cases. `sbase-src/PATCHES.md` lists all eight upstream patches.
+
+`grep` joined them on 2026-08-02, once the BRE/ERE question below had an answer.
 
 **Deliberately not ported**, with reasons:
 
 | Command | Why the shim stays |
 | --- | --- |
-| `grep` | see below — porting it would lose capability *and* change pattern syntax |
 | `find` | 1103 lines and 105 statics for a glob the shim already does; `-exec` needs `fork()` anyway |
 | `xargs`, `env` | both run a command, which without `exec()` only the shell can do |
 | `which` | ours knows about shell functions and builtins; a PATH search does not |
@@ -833,39 +800,28 @@ cases. `sbase-src/PATCHES.md` lists all seven upstream patches.
 | `cp`, `mv`, `rm`, `ln` | one-line delegations to `zsh/files` builtins; nothing to gain |
 | `realpath`, `base64` | sbase has neither |
 
-### grep: evaluated, not ported (2026-08-01)
+### grep: evaluated 2026-08-01, ported 2026-08-02
 
-Two reasons, the second of them a surprise.
+The first pass declined the port for two reasons. The first — that sbase's grep
+would lose `-r`, `-o`, `-m` and the context flags, gaining `-F`, `-x`, `-s` and
+`-f` — turned out to be answerable: the four missing flags were added, in what is
+now the longest entry in `sbase-src/PATCHES.md`.
 
-**It would lose flags.** sbase's grep has `-E -F -H -c -h -i -l -n -q -s -v -w
--x -e -f`. The shim has `-i -v -n -c -r -R -l -o -q -w -e -m -A -B -C -H -h`.
-Trading `-r`, `-o`, `-m` and the context flags for `-F`, `-x`, `-s` and `-f` is
-not obviously a gain, and adding the missing four back would be the largest
-patch in `sbase-src/PATCHES.md` by some distance.
+The second was not an engineering question at all. The shim matched with zsh's
+`=~`, which is always ERE, so `grep 'apple|cherry'` matched both and
+`grep 'a+'` was a quantifier — where every real grep reads those as literal
+characters unless given `-E`. Five tests already encoded the shim's convention,
+so changing it would change what published examples mean.
 
-**It would change what patterns mean.** The shim matches with zsh's `=~`, which
-is always ERE. Real grep — and sbase's — is BRE unless given `-E`:
+That went to Brandon and came back with a rule: switch if no tool named grep
+defaults to ERE, stay if some do. None does — POSIX says BRE, and GNU, BSD/macOS,
+busybox and toybox all agree; `-E`/`egrep` is the opt-in. (ripgrep, ag and ack do
+default to ERE or richer, but none is named grep.) So grep is now BRE by default
+here as well. See item 2 above for what that changed.
 
-```
-grep 'apple|cherry' file   # real grep: no match (literal '|'). shim: matches both
-grep 'a+' file             # real grep: no match (literal '+'). shim: matches
-```
-
-Five tests in `web/test.html` (`grep-alternation`, `grep-plus`, `grep-optional`,
-`grep-brace`, `grep-wo`) use ERE syntax with no `-E`, so the convention is
-already baked in, and any CodeCompared example doing the same would change
-meaning under a POSIX-correct grep.
-
-That makes this a product decision rather than an engineering one, and worth
-taking deliberately: either keep ERE-by-default and stay divergent from every
-real grep, or switch to BRE and accept that existing examples change. Both are
-defensible; neither should happen as a side effect of a port. Until then the
-shim stays, and the divergence is now at least documented rather than
-accidental.
-
-Note the regex engine is *not* the reason to port: `=~` goes through
-`zsh/regex`, which is musl's POSIX regex — the same engine sbase's grep would
-use. Only the dialect differs.
+Worth keeping from the first pass: the regex *engine* was never the reason to
+port. `=~` goes through `zsh/regex`, which is musl's POSIX regex — the same one
+sbase's grep now uses. Only the dialect differed.
 
 **Checklist:**
 - [x] Evaluate BusyBox/toybox as one bundle vs. individual ports (BusyBox ruled
@@ -880,9 +836,9 @@ use. Only the dialect differs.
       wrong: `-a` now lists `.` and `..` (that was `-A` behavior), `-R` prints a
       section per directory, and `-l` finally shows real file types and symlink
       targets rather than a leading `?`.
-- [x] Decided against porting grep — see below. Item 2's OpenBSD-grep plan
-      remains the path if a compiled grep is wanted, and it inherits the same
-      BRE/ERE question.
+- [x] grep ported too (+6.9 KB), once the BRE/ERE question was settled — see
+      above and item 2. Four flags were added to sbase to avoid regressing
+      against the shim.
 
 ---
 
@@ -1012,13 +968,13 @@ Priority Order Summary
 | 1e  | errexit safety in shims    | done      |                                                  |
 | 1f  | empty-input phantom lines  | done      |                                                  |
 | 1g  | `tail -n +N`, `sort -t`    | done      |                                                  |
-| 2   | Compiled grep              | deferred  | see 6d's grep section — a BRE/ERE decision first  |
+| 2   | Compiled grep              | done      | sbase's, BRE by default; `-E` for extended        |
 | 3   | Compiled bc                | done      |                                                  |
 | 4   | find shim                  | done      |                                                  |
 | 5   | Compiled diff              | open      | low priority; nothing depends on it               |
 | 6   | Pipelines without fork()   | done      | the big one                                       |
 | 6b  | Compiled tools re-entrant  | done      |                                                  |
-| 6d  | Compiled coreutils (sbase) | done      | 16 tools; grep/ls/find exceptions documented      |
+| 6d  | Compiled coreutils (sbase) | done      | 17 tools; `find` is the one shim left of the set  |
 | 7   | idbfs testing              | done      |                                                  |
 | 8   | Module install-on-demand   | open      | prerequisite for jq; no pressure until then       |
 | 9   | jq                         | open      | after 8                                           |

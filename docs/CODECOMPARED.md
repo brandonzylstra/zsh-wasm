@@ -198,9 +198,9 @@ remembers the `hasPipelineOp()` guard first.
 The preamble is still needed and still vendored, but it is half the size it was:
 `wc`, `sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`,
 `mktemp`, `ls`, `basename`, `dirname` and `printenv` became compiled builtins in
-0.3.0, alongside `sed`, `awk` and `bc`. What is left in the preamble is the set a
-zsh function still does better — `cp`, `mv`, `rm`, `grep`, `find`, `xargs` and
-friends — and those are what the pipeline stages run.
+0.3.0, and `grep` in 0.4.0, alongside `sed`, `awk` and `bc`. What is left in the
+preamble is the set a zsh function still does better — `cp`, `mv`, `rm`, `find`,
+`xargs` and friends — and those are what the pipeline stages run.
 
 ---
 

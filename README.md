@@ -135,7 +135,7 @@ sed -i '' -E \
 
 `zsh/files` provides file-operation builtins (`zf_mkdir`, `zf_rm`, etc.) that work
 without forking. `zsh/stat` provides `zstat` for reading file metadata.
-`zsh/regex` enables `[[ str =~ pat ]]` and powers the `grep` shim.
+`zsh/regex` enables `[[ str =~ pat ]]`.
 
 ```
 sed -i '' -E \
@@ -255,10 +255,12 @@ The Playwright config starts a local HTTP server automatically, loads `test.html
 and waits for the sentinel attribute `[data-tests-complete]` before checking for
 any `[data-test-status="fail"]` elements.
 
-217 test cases pass (218 total; 1 `knownFail` documenting subshell variable isolation). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
+333 test cases pass (335 total; 2 `knownFail`, documenting subshell variable
+isolation and MEMFS's lack of hard links). Coverage includes: shell builtins (echo, printf, if, for, while, case, function,
 `local` scoping, `$?` exit-status capture), all shims, glob patterns, recursive
 globs, stdin, exit codes, POSIX regex via `=~` (anchors, alternation, character
-classes, `+`/`?`/`{n}` quantifiers), multi-file grep and wc, grep `-A`/`-B`/`-C` context lines, sort combined flags,
+classes, `+`/`?`/`{n}` quantifiers), grep in both dialects (BRE `\|`, `\{n\}` and
+backreferences; ERE `|`, `+`, `?`, `{n}` under `-E`), multi-file grep and wc, grep `-A`/`-B`/`-C` context lines, sort combined flags,
 cut open-ended field ranges, sed (substitution, deletion, address ranges, `-n`/`-e`,
 `-i ''` in-place, line-addressed print), awk (field splitting, pattern matching,
 gsub, sub, NF, NR, FNR, FILENAME, `length()`, `printf`, BEGIN/END, `-v` variables,
@@ -315,11 +317,11 @@ bin/build [--debug] [--out DIR] [--with-sed] [--with-awk] [--with-bc]
                Requires bc-src/ in the project root (included in this repo).
                `echo 'scale=4; 22/7' | bc`, here-strings and heredocs all
                work. dc is also available.
-  --with-sbase Compile sixteen sbase tools (wc, sort, cut, head, tail, uniq,
+  --with-sbase Compile seventeen sbase tools (wc, sort, cut, head, tail, uniq,
                tr, cat, tee, seq, touch, mktemp, ls, basename, dirname,
-               printenv)
+               printenv, grep)
                into the wasm binary as builtins, replacing their zsh-function
-               shims (and ls). Requires sbase-src/ (included in this repo).
+               shims. Requires sbase-src/ (included in this repo).
                Set SBASE_TOOLS to build a subset.
 
 The published build is:
@@ -449,6 +451,7 @@ error messages and all.
 | `ls`      | sbase | `-1 -A -a -c -d -F -f -H -h -i -L -l -n -p -q -R -r -U -u`; symlink targets, real file types |
 | `basename` / `dirname` | sbase | suffix stripping; POSIX path rules |
 | `printenv` | sbase | `[var ...]` |
+| `grep`  | sbase | `-E -F -H -R -c -h -i -l -n -o -q -r -s -v -w -x` `-e PAT` `-f FILE` `-m N` `-A`/`-B`/`-C N`. **Patterns are BRE unless `-E`**, as in every real grep |
 
 The sbase tools (suckless, MIT) are vendored in `sbase-src/`; every change made
 to them for embedding is listed in `sbase-src/PATCHES.md`. Build them with
@@ -467,7 +470,6 @@ without `fork()`.
 | `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
 | `rm`      | `-f` `-r`/`-rf`     | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
 | `ln`      | `-s`, `-f`          | symlinks via `zf_ln -s`; hard links are not supported in MEMFS |
-| `grep`   | `-i` `-v` `-n` `-c` `-r`/`-R` `-l` `-o` `-q` `-w` `-e PAT` `-m N` `-A`/`-B`/`-C N` `-H`/`-h` | POSIX ERE via `=~`; powered by `zsh/regex` module (musl libc); multi-file output includes `filename:` prefix; returns exit code 0/1. Richer than sbase's grep, which has no `-r`, `-o`, `-m` or context lines. Note patterns are always ERE here, where real grep is BRE without `-E`: `grep 'a|b'` matches either, and `grep 'a+'` is a quantifier |
 | `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
 | `xargs`   | `-I STR`, `-n N`    | runs the command in this shell — a compiled xargs would need `exec()` |
 | `env`     | `VAR=val`, `-u VAR` | same reason as xargs; `-i` (clear env) silently ignored |
