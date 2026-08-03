@@ -334,6 +334,21 @@ The published build is:
   bin/build --with-sed --with-awk --with-bc --with-sbase --with-diff
 ```
 
+What those flags cost, measured on 2026-08-03:
+
+| Build                                          | `zsh.wasm` |
+| ---------------------------------------------- | ---------- |
+| `bin/build` with no flags                      | 926.7 KB   |
+| the published build, everything compiled in    | 1376.9 KB  |
+| **what the tools add**                         | **450.2 KB** |
+
+Everything is in one binary on purpose. An example that prints
+`sort: command not found` has failed; one that took 450 KB longer to arrive has
+not — and the file is served from a versioned URL, so a consumer caches it once
+per release rather than once per visit. `docs/PLAN.md` item 8 has the working
+for that decision, including why Emscripten's dynamic linking was measured and
+turned down.
+
 JS modules
 ----------
 

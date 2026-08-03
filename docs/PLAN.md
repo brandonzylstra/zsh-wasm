@@ -895,77 +895,149 @@ real HTTP server. Tests must run against the HTTP server (already the case with
 
 ---
 
-8. Module install-on-demand (prerequisite for jq and future tools)
-------------------------------------------------------------------
+8. Module install-on-demand ✓ researched, and declined for now
+---------------------------------------------------------------
 
-**Status:** Architectural research. Currently all compiled-in tools are baked
-into the wasm binary at build time. Each `--with-X` flag increases binary size
-for everyone.
+**Status:** Option C adopted (2026-08-03): everything ships in one binary.
+Option A spiked and rejected on measurement, with the numbers below. Option D
+below is new, and is the one to reach for when jq forces the question.
 
-**Goal:** Allow users to load additional wasm modules (grep, bc, jq, diff, …)
-on demand — only paying for what they use.
+**The question.** Every `--with-X` flag adds to the binary that everybody
+downloads. Should optional tools be loadable on demand instead?
 
-**Approaches:**
+### What one binary actually costs (measured 2026-08-03)
 
-### Option A: Separate wasm binaries
+| Build                                                     | `zsh.wasm` |
+| --------------------------------------------------------- | ---------- |
+| slim — `bin/build` with no flags                            | 926.7 KB   |
+| shipped — sed, awk, bc, 17 sbase tools, diff                | 1376.9 KB  |
+| **everything the flags add**                                | **450.2 KB** |
 
-- Build `zsh-grep.wasm`, `zsh-bc.wasm`, etc. as separate Emscripten modules
-- Ship them as separate npm packages (`zsh-wasm-grep`, etc.) or as optional
-  files in the main package
-- At runtime, load and link dynamically via Emscripten's dynamic linking
-  (`MAIN_MODULE` / `SIDE_MODULE`)
+450 KB is the entire prize. It is worth holding that number in mind, because it
+is smaller than the machinery proposed to save it.
 
-Emscripten supports dynamic linking but it's complex and has restrictions (all
-code must be compiled as PIC with `-fPIC`). Requires rebuilding the main binary
-with `MAIN_MODULE=1`.
+### Option A: Emscripten dynamic linking — spiked, does not pay
+
+A side module exporting `tool_main(argc, argv)` — the same shape
+`run_sbase_tool()` already calls — was built with `-sSIDE_MODULE=1`, `dlopen`ed
+by a main module built with `-sMAIN_MODULE=1`, found with `dlsym`, called, and
+returned its exit status correctly. The mechanism works on Emscripten 6.0.1.
+
+The cost is the problem. That main module contains one function — a `dlopen`, a
+`dlsym` and a `printf` — and comes to **1276.2 KB**, because `MAIN_MODULE=1`
+keeps every libc symbol alive against the possibility that some future side
+module wants it. Trading 450 KB of tools for a megabyte of linker overhead is
+strictly worse.
+
+`MAIN_MODULE=2` is the variant meant to avoid exactly that, by exporting only
+what the link step can see. It does not work here: the side module imports
+`__stack_pointer` as a mutable global, and the pruned main module does not
+export it as a `WebAssembly.Global`, so instantiation fails with
+
+```
+LinkError: imported mutable global must be a WebAssembly.Global object
+```
+
+Adding `-sEXPORT_ALL=1` gets past that and then dies inside a stub
+(`TypeError: resolved is not a function`). So the cheap variant is not available
+today.
+
+One caveat on the 1276.2 KB: it is a standalone floor, not the delta for
+zsh.wasm, which already links most of libc. Measuring the real delta means
+rebuilding zsh and every tool with `-fPIC` — a full reconfigure. That was not
+done, because the floor is already three times the prize and the conclusion
+does not turn on the exact figure.
 
 ### Option B: Wasm component model
 
-- Use the emerging WebAssembly Component Model to compose modules at runtime
-- Very new (2024–2025); toolchain support is still maturing
+Still not worth starting. Toolchain support has not arrived in a form that
+would beat Option D below.
 
-### Option C: Keep the shim as fallback; compiled tools are opt-in at build time
+### Option C: one binary, everything in it ⭐ ADOPTED
 
-- Status quo: `--with-grep`, `--with-bc`, etc.
-- Provide multiple pre-built npm packages: `zsh-wasm` (slim), `zsh-wasm-full`
-  (with sed, awk, grep, bc)
-- No runtime loading; users choose at install time
+The shipped build is `--with-sed --with-awk --with-bc --with-sbase --with-diff`.
+450 KB buys sed, awk, bc, diff and seventeen coreutils that behave like the real
+things.
 
-**Recommendation:** Option C is the practical path for `0.x`. Start Option A
-research when the tool list grows large enough that the monolithic binary
-becomes a real problem. jq specifically is deferred until Option A is viable.
+The reason to prefer this over a slim/full split is what the alternative costs a
+reader. A cheatsheet example that prints `sort: command not found` has failed;
+one that took 450 KB longer to arrive has not. And CodeCompared caches the
+binary permanently at a versioned URL, so it is paid once per release, not per
+visit.
 
-**Checklist (Option C — short-term):**
-- [ ] Decide which tools are in the "default published" npm binary
-  - Current recommendation: include sed, awk, grep, bc (once built)
-  - This makes the published package self-contained for most scripting use
-- [ ] Document the `--with-X` flags so downstream users who build from source
-      know how to customize
+**Not recommended:** publishing a second slim npm package. It doubles the
+release surface — two builds, two tags, two sets of integration instructions —
+to save 450 KB on an asset that is cached forever. `--with-X` and `SBASE_TOOLS`
+already let anyone who builds from source choose their own subset, which covers
+the case a slim package would serve.
 
-**Checklist (Option A — future research):**
-- [ ] Spike: build a trivial "hello" side module and load it into the main wasm
-- [ ] Evaluate Emscripten dynamic linking API (`dlopen`/`dlsym`) in a worker
-- [ ] Prototype `runZshScript(src, { modules: ['grep', 'bc'] })`
+### Option D: a second complete binary, chosen at load time (new)
+
+The realisation from the spike: nothing about "load jq only when a script uses
+it" requires *dynamic linking*. It requires two artifacts and a rule for picking
+one.
+
+Build `zsh-jq.wasm` as its own ordinary Emscripten program — the same zsh, with
+jq compiled in alongside everything else — and have `web/zsh-loader.js`, which
+already lazy-loads, choose which binary to fetch. A script mentioning `jq` gets
+the larger one; every other script never sees it.
+
+- No `MAIN_MODULE`, no `-fPIC` rebuild, no relocation tables, no Emscripten
+  dynamic-linking bugs.
+- Costs: two binaries to build, tag and cache; a script that uses jq downloads
+  the common tools a second time; and the build becomes a small matrix rather
+  than a single command.
+- The duplication is the honest objection. It is 926.7 KB of shared zsh copied
+  into the second artifact — real, but a fixed price rather than a growing one,
+  and only paid by readers who load a jq example.
+
+**Checklist (Option C — done):**
+- [x] Decide which tools are in the default published binary — all of them:
+      sed, awk, bc, diff and the seventeen sbase tools
+- [x] Document the `--with-X` flags for downstream builders (README, and
+      `SBASE_TOOLS=…` for subsetting sbase)
+- [x] Measure what that decision costs (450.2 KB; table above)
+
+**Checklist (Option A — spiked, closed):**
+- [x] Spike: build a trivial side module and load it into a main module
+- [x] Evaluate the Emscripten dynamic linking API (`dlopen`/`dlsym`) — works
+      under `MAIN_MODULE=1`, and `MAIN_MODULE=2` does not work at all
+- [x] Measure the overhead — 1276.2 KB floor against a 450.2 KB prize
+- [ ] ~~Prototype `runZshScript(src, { modules: [...] })`~~ — not worth building
+      on a mechanism that costs more than it saves
+
+**When to reopen:** when a single optional tool is bigger than the overhead of
+loading it separately. That is jq and, as far as the current list goes, nothing
+else — and even for jq, Option D gets there without dynamic linking.
 
 ---
 
-9. jq (deferred — needs install-on-demand)
-------------------------------------------
+9. jq (deferred — and now with a route in)
+-------------------------------------------
 
 **Status:** Deferred. jq is not installed by default on all systems and carries
-a heavier weight (its own query language, PCRE regex engine, ~150 KLOC). It
-makes more sense as an optional module than as a default binary.
+a heavier weight (its own query language, PCRE regex engine, ~150 KLOC).
 
-**When to revisit:** After the install-on-demand module system (item 8 above)
-has a working prototype. At that point, jq becomes an installable add-on rather
-than a bloat-or-skip binary decision.
+**What changed on 2026-08-03.** Item 8 was jq's stated prerequisite, and it now
+has an answer: Emscripten's dynamic linking costs more than it saves, so there
+will be no side-module system to install jq into. The route in is item 8's
+Option D instead — build `zsh-jq.wasm` as a second complete binary and let
+`web/zsh-loader.js` pick it for scripts that mention `jq`. That needs no
+mechanism that does not already exist.
+
+So jq is no longer blocked on research. It is blocked on someone deciding the
+duplication is worth it: a second artifact carries its own copy of the 926.7 KB
+shared zsh, and only readers of jq examples pay for it.
 
 **Notes for the future:**
 - jq uses a Bison grammar (needs a bison-generated parser; build-time dependency)
 - jq embeds `oniguruma` regex by default; could use `--without-oniguruma` to
-  fall back to POSIX regex
+  fall back to POSIX regex — which is what `grep` and `sed` already use here
 - The jq test suite is excellent and would serve as a ready-made test corpus
 - License: MIT
+- Measure it first. If jq compiles to less than the 450 KB everything else
+  costs put together, the second-binary argument collapses and it should simply
+  join the main build under `--with-jq`.
 
 ---
 
@@ -1007,6 +1079,6 @@ Priority Order Summary
 | 6b  | Compiled tools re-entrant  | done      |                                                  |
 | 6d  | Compiled coreutils (sbase) | done      | 17 tools; `find` is the one shim left of the set  |
 | 7   | idbfs testing              | done      |                                                  |
-| 8   | Module install-on-demand   | open      | prerequisite for jq; no pressure until then       |
-| 9   | jq                         | open      | after 8                                           |
+| 8   | Module install-on-demand   | done      | one binary; dynamic linking costs more than it saves |
+| 9   | jq                         | open      | take item 8's Option D — a second binary, not a side module |
 | 10  | Demo improvements          | done      |                                                  |
