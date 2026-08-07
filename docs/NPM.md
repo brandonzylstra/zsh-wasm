@@ -86,10 +86,12 @@ worker in an `init` message. `locateFile` is set from the same message, so a
 content-hashed `zsh-XVyxQy0i.wasm` is still found — Emscripten would otherwise
 derive the name from the hashed loader and miss.
 
-Verified after the fix: a Vite 5 build with no configuration emits all four
-files and runs zsh 5.9, a `sort | tr` pipeline, `bc` from a pipe and `diff -u`
-from a pipe, exit code 0, no failed requests. The unbundled path was unchanged
-at 351 passing and 2 known-fail.
+Verified after the fix, on Vite 5 and Webpack 5, neither needing any
+configuration: both emit the worker, the loader and the wasm, and both run
+zsh 5.9, a `sort | tr` pipeline, `bc` from a pipe and `diff -u` from a pipe —
+exit code 0, no failed requests. Webpack minifies `zsh.js` on the way through,
+which turns out to be harmless. esbuild is still unverified. The unbundled path
+was unchanged at 351 passing and 2 known-fail.
 
 **The lesson for next time:** the test project must install a real tarball
 (`npm pack` then install the `.tgz`), not a `file:` reference to `npm/`. A

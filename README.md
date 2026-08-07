@@ -38,9 +38,11 @@ which caches permanently at a versioned URL.
 **Bundlers:** the worker, the Emscripten loader and the wasm are all referenced
 with `new URL('./file', import.meta.url)`, the form bundlers read statically, so
 they are emitted as assets and their URLs rewritten — content-hashed names
-included. **Vite 5 is verified to work with no configuration**, tested against a
-real tarball install. Webpack 5 and esbuild support the same convention and are
-expected to work but have not been verified.
+included. **Vite 5 and Webpack 5 are both verified to work with no
+configuration**, each tested against a real tarball install by building and then
+running zsh plus a pipeline through the compiled `sort`, `tr`, `bc` and `diff`.
+esbuild supports the same convention and is expected to work, but has not been
+verified.
 
 This did not work before 0.6.0: the worker reached the loader through
 `importScripts('./zsh.js')`, a string no bundler can see into, so neither the

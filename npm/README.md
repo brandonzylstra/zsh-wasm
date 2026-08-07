@@ -113,13 +113,15 @@ Three files have to reach the browser: the worker, the Emscripten loader
 bundler emits them as assets and rewrites the URLs to wherever it puts them —
 including content-hashed names.
 
-**Vite 5: verified, no configuration required.** A project that installs this
-package and runs `vite build` gets all four files in `dist/assets/` and runs
-correctly from the built output. This is tested against a real tarball install.
+**Vite 5 and Webpack 5: both verified, neither needs configuration.** A project
+that installs this package and builds gets the worker, the loader and the wasm
+emitted as assets, and runs correctly from the built output. Both were tested
+against a real tarball install, running zsh plus a pipeline through the compiled
+`sort`, `tr`, `bc` and `diff`. Webpack minifies `zsh.js` on the way through and
+that turns out to be harmless.
 
-**Webpack 5 and esbuild: expected to work, not yet verified.** They support the
-same `new URL(..., import.meta.url)` asset convention. If you hit trouble,
-please open an issue — the fix is likely small and the report is useful.
+**esbuild: not verified.** It supports the same convention, so it is expected to
+work. If it does not, please open an issue.
 
 If your bundler does not understand that convention, copy `zsh.js` and
 `zsh.wasm` out of the package into a directory it serves verbatim, and make sure
