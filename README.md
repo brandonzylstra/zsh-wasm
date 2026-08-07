@@ -30,14 +30,26 @@ const { stdout: out } = await runZshScript('while IFS= read -r line; do echo "> 
 const { stdout: files } = await runZshScript('ls /home/user', { fs: 'idbfs' });
 ```
 
-The package ships `zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, and `zsh.wasm`.
-The script runs in a Web Worker so the main thread never blocks.
+The package ships `zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, `zsh.wasm`, and
+the two license files. The script runs in a Web Worker so the main thread never
+blocks. It is about 610 KB gzipped over the wire, almost all of it the binary,
+which caches permanently at a versioned URL.
 
-**Bundler note:** `zsh-runtime.js` spawns a worker via
-`new Worker(new URL('./zsh-worker.js', import.meta.url))`, which Vite and
-Webpack 5 handle automatically. The `zsh.wasm` binary is loaded by
-Emscripten's runtime relative to the JS file — if your bundler moves the wasm,
-you may need to configure it to emit wasm as a static asset.
+**Bundlers:** the worker, the Emscripten loader and the wasm are all referenced
+with `new URL('./file', import.meta.url)`, the form bundlers read statically, so
+they are emitted as assets and their URLs rewritten — content-hashed names
+included. **Vite 5 is verified to work with no configuration**, tested against a
+real tarball install. Webpack 5 and esbuild support the same convention and are
+expected to work but have not been verified.
+
+This did not work before 0.6.0: the worker reached the loader through
+`importScripts('./zsh.js')`, a string no bundler can see into, so neither the
+loader nor the wasm was emitted and a bundled page hung on a 404. Anyone
+bundling 0.5.0 or earlier should upgrade.
+
+**Node.js is not supported** — the package needs Web Workers and
+`import.meta.url`. Calling `runZshScript` outside a browser throws an error that
+says so.
 
 How To Build
 ------------
@@ -336,11 +348,11 @@ The published build is:
 
 What those flags cost, measured on 2026-08-03:
 
-| Build                                          | `zsh.wasm` |
-| ---------------------------------------------- | ---------- |
-| `bin/build` with no flags                      | 926.7 KB   |
-| the published build, everything compiled in    | 1376.9 KB  |
-| **what the tools add**                         | **450.2 KB** |
+| Build                                       | `zsh.wasm`   |
+| ------------------------------------------- | ------------ |
+| `bin/build` with no flags                   | 926.7 KB     |
+| the published build, everything compiled in | 1376.9 KB    |
+| **what the tools add**                      | **450.2 KB** |
 
 Everything is in one binary on purpose. An example that prints
 `sort: command not found` has failed; one that took 450 KB longer to arrive has
@@ -451,28 +463,28 @@ Real implementations, compiled into `zsh.wasm` as zsh builtins. These behave
 like the tools they are, because they *are* the tools — flags, exit codes,
 error messages and all.
 
-| Command | Source | Notes |
-|---------|--------|-------|
-| `sed`   | OpenBSD sed | `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space |
-| `awk`   | one-true-awk (BWK) | patterns, BEGIN/END, `-F`, `-v`, gsub/sub/split, printf |
-| `bc`    | Gavin Howard bc | arbitrary precision, `scale`, `sqrt()`, user functions; `dc` too |
-| `wc`    | sbase | `-l` `-w` `-c` `-m`; a `total` line for multiple files |
-| `sort`  | sbase | `-b` `-C` `-c` `-d` `-f` `-i` `-k` `-m` `-n` `-o` `-r` `-t` `-u` |
-| `cut`   | sbase | `-b` `-c` `-d` `-f` `-n` `-s` |
-| `head`  | sbase | `-n N`, `-N`, `-c N`; `==> name <==` headers for multiple files |
-| `tail`  | sbase | `-n N`, `-N`, `-n +N`, `-c N`; headers for multiple files |
-| `uniq`  | sbase | `-c` `-d` `-u` `-f fields` `-s chars` |
-| `tr`    | sbase | full set translation, `-c` `-C` `-d` `-s` |
-| `cat`   | sbase | `-u`; multiple files |
-| `tee`   | sbase | `-a` `-i` |
-| `seq`   | sbase | `-f fmt` `-s sep` `-w`; integer and float steps |
-| `touch` | sbase | `-a` `-c` `-m` `-d/-t/-T time` `-r file` |
-| `mktemp`| sbase | `-d` `-q` `-t` `-u` `-p dir` |
-| `ls`      | sbase | `-1 -A -a -c -d -F -f -H -h -i -L -l -n -p -q -R -r -U -u`; symlink targets, real file types |
-| `basename` / `dirname` | sbase | suffix stripping; POSIX path rules |
-| `printenv` | sbase | `[var ...]` |
-| `diff`  | OpenBSD diff | default, `-c`/`-u` (with `-C`/`-U num`), `-e`, `-f`, `-n`, `-q`, `-D`; `-b -d -i -p -t -T -w` for how lines are compared; `-r -N -P -s -S -x -X` for directories; `-L label` |
-| `grep`  | sbase | `-E -F -H -R -c -h -i -l -n -o -q -r -s -v -w -x` `-e PAT` `-f FILE` `-m N` `-A`/`-B`/`-C N`. **Patterns are BRE unless `-E`**, as in every real grep |
+| Command                | Source             | Notes                                                                                                                                                                        |
+| ---------------------- | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sed`                  | OpenBSD sed        | `s/pat/repl/[g]`, `/pat/d`, `-n`, `-e`, address ranges, hold space                                                                                                           |
+| `awk`                  | one-true-awk (BWK) | patterns, BEGIN/END, `-F`, `-v`, gsub/sub/split, printf                                                                                                                      |
+| `bc`                   | Gavin Howard bc    | arbitrary precision, `scale`, `sqrt()`, user functions; `dc` too                                                                                                             |
+| `wc`                   | sbase              | `-l` `-w` `-c` `-m`; a `total` line for multiple files                                                                                                                       |
+| `sort`                 | sbase              | `-b` `-C` `-c` `-d` `-f` `-i` `-k` `-m` `-n` `-o` `-r` `-t` `-u`                                                                                                             |
+| `cut`                  | sbase              | `-b` `-c` `-d` `-f` `-n` `-s`                                                                                                                                                |
+| `head`                 | sbase              | `-n N`, `-N`, `-c N`; `==> name <==` headers for multiple files                                                                                                              |
+| `tail`                 | sbase              | `-n N`, `-N`, `-n +N`, `-c N`; headers for multiple files                                                                                                                    |
+| `uniq`                 | sbase              | `-c` `-d` `-u` `-f fields` `-s chars`                                                                                                                                        |
+| `tr`                   | sbase              | full set translation, `-c` `-C` `-d` `-s`                                                                                                                                    |
+| `cat`                  | sbase              | `-u`; multiple files                                                                                                                                                         |
+| `tee`                  | sbase              | `-a` `-i`                                                                                                                                                                    |
+| `seq`                  | sbase              | `-f fmt` `-s sep` `-w`; integer and float steps                                                                                                                              |
+| `touch`                | sbase              | `-a` `-c` `-m` `-d/-t/-T time` `-r file`                                                                                                                                     |
+| `mktemp`               | sbase              | `-d` `-q` `-t` `-u` `-p dir`                                                                                                                                                 |
+| `ls`                   | sbase              | `-1 -A -a -c -d -F -f -H -h -i -L -l -n -p -q -R -r -U -u`; symlink targets, real file types                                                                                 |
+| `basename` / `dirname` | sbase              | suffix stripping; POSIX path rules                                                                                                                                           |
+| `printenv`             | sbase              | `[var ...]`                                                                                                                                                                  |
+| `diff`                 | OpenBSD diff       | default, `-c`/`-u` (with `-C`/`-U num`), `-e`, `-f`, `-n`, `-q`, `-D`; `-b -d -i -p -t -T -w` for how lines are compared; `-r -N -P -s -S -x -X` for directories; `-L label` |
+| `grep`                 | sbase              | `-E -F -H -R -c -h -i -l -n -o -q -r -s -v -w -x` `-e PAT` `-f FILE` `-m N` `-A`/`-B`/`-C N`. **Patterns are BRE unless `-E`**, as in every real grep                        |
 
 The sbase tools (suckless, MIT) are vendored in `sbase-src/` and OpenBSD diff in
 `diff-src/`; every change made to either for embedding is listed in the
@@ -491,20 +503,20 @@ still here are the cases where a zsh function is the *better* answer: they eithe
 need the shell's own knowledge, or they need something a compiled tool cannot do
 without `fork()`.
 
-| Command  | Flags supported      | Notes |
-|----------|----------------------|-------|
-| `cp`     | —                    | single-file copy |
-| `mv`     | —                    | single-file move (uses `zf_rm` from `zsh/files`) |
-| `rm`      | `-f` `-r`/`-rf`     | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees |
-| `ln`      | `-s`, `-f`          | symlinks via `zf_ln -s`; hard links are not supported in MEMFS |
-| `find`    | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported |
-| `xargs`   | `-I STR`, `-n N`    | runs the command in this shell — a compiled xargs would need `exec()` |
-| `env`     | `VAR=val`, `-u VAR` | same reason as xargs; `-i` (clear env) silently ignored |
-| `which`   | —                   | knows about shell functions and builtins, which a PATH search does not |
-| `date`    | `+FORMAT`           | uses `strftime` from `zsh/datetime`; always uses the browser's local timezone (Emscripten's `localtime` delegates to JS `Date`); `%z` outputs the correct UTC offset |
-| `sleep`   | seconds (float)     | real sleep via `Atomics.wait()` in the Web Worker when `SharedArrayBuffer` is available (requires COOP+COEP headers); prints a stderr diagnostic and continues otherwise |
-| `realpath`| —                   | resolves absolute path using zsh's `:A` modifier; sbase has no realpath |
-| `base64`  | `-d`/`--decode`     | encode stdin to Base64 (76-char line wrap); decode Base64 to bytes; sbase has no base64 |
+| Command    | Flags supported                               | Notes                                                                                                                                                                    |
+| ---------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `cp`       | —                                             | single-file copy                                                                                                                                                         |
+| `mv`       | —                                             | single-file move (uses `zf_rm` from `zsh/files`)                                                                                                                         |
+| `rm`       | `-f` `-r`/`-rf`                               | delegates to `zf_rm`/`zf_rmdir` from `zsh/files`; `-r` removes directory trees                                                                                           |
+| `ln`       | `-s`, `-f`                                    | symlinks via `zf_ln -s`; hard links are not supported in MEMFS                                                                                                           |
+| `find`     | `-name`, `-type f/d/l`, `-maxdepth`, `-newer` | zsh glob recursion; dotfiles included; `-exec` not supported                                                                                                             |
+| `xargs`    | `-I STR`, `-n N`                              | runs the command in this shell — a compiled xargs would need `exec()`                                                                                                    |
+| `env`      | `VAR=val`, `-u VAR`                           | same reason as xargs; `-i` (clear env) silently ignored                                                                                                                  |
+| `which`    | —                                             | knows about shell functions and builtins, which a PATH search does not                                                                                                   |
+| `date`     | `+FORMAT`                                     | uses `strftime` from `zsh/datetime`; always uses the browser's local timezone (Emscripten's `localtime` delegates to JS `Date`); `%z` outputs the correct UTC offset     |
+| `sleep`    | seconds (float)                               | real sleep via `Atomics.wait()` in the Web Worker when `SharedArrayBuffer` is available (requires COOP+COEP headers); prints a stderr diagnostic and continues otherwise |
+| `realpath` | —                                             | resolves absolute path using zsh's `:A` modifier; sbase has no realpath                                                                                                  |
+| `base64`   | `-d`/`--decode`                               | encode stdin to Base64 (76-char line wrap); decode Base64 to bytes; sbase has no base64                                                                                  |
 
 `mkdir` works natively — Emscripten supports that syscall directly without forking.
 
@@ -555,18 +567,20 @@ Known Limitations
 License
 -------
 
-zsh-wasm itself is under [the Zsh License](https://github.com/zsh-users/zsh/blob/master/LICENCE),
-as is the interpreter it is built from. The tools compiled into the binary keep
-their own:
+zsh-wasm itself is under the Zsh license — see [`LICENSE`](LICENSE) — as is the
+interpreter it is built from. The tools compiled into the binary keep their own,
+and all six texts are reproduced verbatim in
+[`THIRD_PARTY_LICENSES.md`](THIRD_PARTY_LICENSES.md), which ships inside the npm
+package and should travel with the binary anywhere it is redistributed:
 
-| Component        | Source                              | License                                        |
-| ---------------- | ----------------------------------- | ---------------------------------------------- |
-| zsh 5.9          | zsh-users                           | Zsh License                                    |
-| `sed`            | OpenBSD sed                         | 3-clause BSD                                   |
-| `awk`            | one-true-awk (BWK)                  | MIT-style (Lucent)                             |
-| `bc`, `dc`       | Gavin Howard bc                     | 2-clause BSD                                   |
-| 17 coreutils     | sbase (suckless)                    | MIT — `sbase-src/LICENSE`                      |
-| `diff`           | OpenBSD diff                        | mixed — `diff-src/LICENSE`                     |
+| Component    | Source             | License                    |
+| ------------ | ------------------ | -------------------------- |
+| zsh 5.9      | zsh-users          | Zsh License                |
+| `sed`        | OpenBSD sed        | 3-clause BSD               |
+| `awk`        | one-true-awk (BWK) | MIT-style (Lucent)         |
+| `bc`, `dc`   | Gavin Howard bc    | 2-clause BSD               |
+| 17 coreutils | sbase (suckless)   | MIT — `sbase-src/LICENSE`  |
+| `diff`       | OpenBSD diff       | mixed — `diff-src/LICENSE` |
 
 One of those is worth a second look before you build a product on it:
 `diff-src/diffreg.c` is under Caldera International's 4-clause BSD, whose
@@ -576,3 +590,12 @@ documentation, and it is the same term OpenBSD, FreeBSD and NetBSD have shipped
 `diff` under for two decades — but it is a live clause, unlike Berkeley's, which
 was rescinded in 1999. `diff-src/LICENSE` has the wording. Building without
 `--with-diff` leaves it out entirely.
+
+**The decision, as of 0.6.0: accepted.** Nothing about distributing this package
+triggers the clause, and if zsh-wasm is ever advertised on the strength of what
+it can do, the acknowledgement belongs in that advertisement. The practical cost
+is not legal exposure but tooling: some corporate license scanners flag 4-clause
+BSD as non-approved, so an enterprise consumer may have to have a conversation
+about it. That was judged a smaller price than dropping `diff` or re-porting it
+from toybox, and the choice is reversible — the acknowledgement is a notice, not
+a design commitment.
