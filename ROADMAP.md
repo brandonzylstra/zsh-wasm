@@ -92,7 +92,7 @@ outer scope, because without fork() the body of `( )` runs in this shell.
 The runner supports a `knownFail` flag on individual tests: these display on
 the page as grey `xfail` entries with expected/actual detail, are excluded from
 the Playwright failure count, and serve as a live record of known broken
-behaviour pending a fix.
+behavior pending a fix.
 
 ---
 

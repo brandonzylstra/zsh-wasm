@@ -32,26 +32,26 @@ Owner Preferences
 Key Files
 ---------
 
-| File                                 | Purpose                                                                          |
-| ------------------------------------ | -------------------------------------------------------------------------------- |
-| `bin/build`                          | Main Emscripten build script; outputs `web/zsh.js` + `web/zsh.wasm`              |
+| File                                 | Purpose                                                                                                  |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| `bin/build`                          | Main Emscripten build script; outputs `web/zsh.js` + `web/zsh.wasm`                                      |
 | `bin/setup`                          | One-time setup; also holds the `Src/exec.c` patches that make `$( )` and pipelines work without `fork()` |
-| `bin/run-script`                      | Node CLI harness: run a script against a build without a browser (dev aid)      |
-| `embed/embed_stdin.h`                | Shared stdin reset used by the compiled sed/awk/bc builtins                     |
-| `web/zsh.js`                         | Emscripten loader (build output, committed to git)                               |
-| `web/zsh.wasm`                       | Compiled Zsh 5.9 binary (build output, committed)                                |
-| `web/zsh-runtime.js`                 | JS wrapper: `runZshScript(src, opts)` → `{ stdout, stderr }`                     |
-| `web/zsh-worker.js`                  | Web Worker that isolates WASM execution from the main thread                     |
-| `web/zsh-loader.js`                  | Lazy-loader helper used by the CodeCompared runner                               |
-| `web/index.html`                     | Interactive demo page                                                            |
-| `web/test.html`                      | Playwright test harness (235 test cases)                                         |
-| `npm/package.json`                   | npm package manifest for `@brandon.zylstra/zsh-wasm`                             |
-| `npm/index.d.ts`                     | TypeScript type declarations                                                     |
-| `docs/PLAN.md`                       | Roadmap: compiled builtins, pipe simulation, idbfs, etc.                         |
-| `docs/NPM.md`                        | npm publish checklist                                                            |
-| `docs/CODECOMPARED.md`               | Steps to release a version and update CodeCompared                               |
-| `.github/workflows/deploy.yaml`      | Deploys `web/` to GitHub Pages on push to main                                   |
-| `.github/workflows/publish-npm.yaml` | Publishes `npm/` to the npm registry on `v*` tag push (needs `NPM_TOKEN` secret) |
+| `bin/run-script`                     | Node CLI harness: run a script against a build without a browser (dev aid)                               |
+| `embed/embed_stdin.h`                | Shared stdin reset used by the compiled sed/awk/bc builtins                                              |
+| `web/zsh.js`                         | Emscripten loader (build output, committed to git)                                                       |
+| `web/zsh.wasm`                       | Compiled Zsh 5.9 binary (build output, committed)                                                        |
+| `web/zsh-runtime.js`                 | JS wrapper: `runZshScript(src, opts)` → `{ stdout, stderr }`                                             |
+| `web/zsh-worker.js`                  | Web Worker that isolates WASM execution from the main thread                                             |
+| `web/zsh-loader.js`                  | Lazy-loader helper used by the CodeCompared runner                                                       |
+| `web/index.html`                     | Interactive demo page                                                                                    |
+| `web/test.html`                      | Playwright test harness (235 test cases)                                                                 |
+| `npm/package.json`                   | npm package manifest for `@brandon.zylstra/zsh-wasm`                                                     |
+| `npm/index.d.ts`                     | TypeScript type declarations                                                                             |
+| `docs/PLAN.md`                       | Roadmap: compiled builtins, pipe simulation, idbfs, etc.                                                 |
+| `docs/NPM.md`                        | npm publish checklist                                                                                    |
+| `docs/CODECOMPARED.md`               | Steps to release a version and update CodeCompared                                                       |
+| `.github/workflows/deploy.yaml`      | Deploys `web/` to GitHub Pages on push to main                                                           |
+| `.github/workflows/publish-npm.yaml` | Publishes `npm/` to the npm registry on `v*` tag push (needs `NPM_TOKEN` secret)                         |
 
 ---
 
@@ -118,6 +118,34 @@ reset per invocation — see `embed/embed_stdin.h` and the reset blocks at the t
 of `awk_main()` / `bc_embed_main()` / `sed_main()`.
 
 ---
+
+Spellcheck (noah)
+-----------------
+
+A hook runs `noah` on every file written here, and it rejects British spellings.
+Configuration lives in `.noah/`, and the split is deliberate:
+
+- **`.noah/ignore`** — the vendored trees (`zsh-5.9/`, `awk-20260426/`,
+  `bc-7.0.3/`, the upstream C under `*-src/`), the build trees, the generated
+  `zsh.js`, and the root `LICENSE`. We do not respell code we did not write:
+  editing an upstream comment adds diff noise against upstream, which is exactly
+  what each `PATCHES.md` exists to keep small. Our own glue (`*_mod.c`,
+  `*_embed.[ch]`) and every `PATCHES.md` are re-included with `!`, so they are
+  still checked.
+- **`.noah/permit`** — the path `zsh-5.9/LICENCE`, and the same name inside the
+  upstream URL in `web/index.html`. Both are real names, not spelling choices:
+  zsh ships its license file under that spelling, so renaming either would point
+  at a file that does not exist. A permit excuses a word only inside one exact
+  string, which is why it is the right tool here and `accept` is not.
+- **`noah:ignore` on a fenced block** — how `THIRD_PARTY_LICENSES.md` keeps its
+  quoted license texts verbatim while its own prose stays checked. Prefer this
+  to ignoring a whole file.
+
+Verbatim quotations — license texts above all — must never be "corrected". When
+the hook flags one, excuse it; do not edit it. Coverage was checked by injecting
+a British spelling into one file of each class and confirming `noah` caught all
+twelve, so if you add a new source directory, re-check that it is not silently
+skipped.
 
 Building
 --------

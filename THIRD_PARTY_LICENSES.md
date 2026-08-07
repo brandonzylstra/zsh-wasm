@@ -63,7 +63,7 @@ which produces a conversation rather than a problem. Building without
 
 The shell itself. Source: `zsh-5.9/LICENCE` (also reproduced in `LICENSE`).
 
-```
+```text noah:ignore
 Unless otherwise noted in the header of specific files, files in this
 distribution have the licence shown below.
 
@@ -109,7 +109,7 @@ maintenance, support, updates, enhancements, or modifications.
 
 Source: header of `sed-src/main.c`. The same notice covers `compile.c`, `process.c` and `misc.c`.
 
-```
+```text noah:ignore
 /*	$OpenBSD: main.c,v 1.47 2024/07/17 20:57:16 millert Exp $	*/
 
 /*-
@@ -153,7 +153,7 @@ Source: header of `sed-src/main.c`. The same notice covers `compile.c`, `process
 
 Source: `awk-20260426/LICENSE`.
 
-```
+```text noah:ignore
 /****************************************************************
 Copyright (C) Lucent Technologies 1997
 All Rights Reserved
@@ -185,7 +185,7 @@ THIS SOFTWARE.
 
 Source: `bc-7.0.3/LICENSE.md`. The main BSD-2-Clause grant is first; `history.c` and `rand.c` carry their own copyrights and are reproduced after it. Both files are compiled into this build even though their features are disabled at compile time, so their notices are included.
 
-```
+```text noah:ignore
 # License
 
 Copyright (c) 2018-2024 Gavin D. Howard <gavin@gavinhoward.com>
@@ -307,7 +307,7 @@ this stuff is worth it, you can buy me a beer in return.   Poul-Henning Kamp
 
 Source: `sbase-src/LICENSE`. Covers `wc`, `sort`, `cut`, `head`, `tail`, `uniq`, `tr`, `cat`, `tee`, `seq`, `touch`, `mktemp`, `ls`, `basename`, `dirname`, `printenv` and `grep`.
 
-```
+```text noah:ignore
 MIT License
 
 © 2011 Connor Lane Smith <cls@lubutu.com>
@@ -379,7 +379,7 @@ Authors/contributors include:
 
 Source: header of `diff-src/diff.c`. The same notice covers `diffdir.c`, `xmalloc.c` and `xmalloc.h`.
 
-```
+```text noah:ignore
 /*	$OpenBSD: diff.c,v 1.69 2026/02/18 15:25:01 deraadt Exp $	*/
 
 /*
@@ -410,7 +410,7 @@ Source: header of `diff-src/diff.c`. The same notice covers `diffdir.c`, `xmallo
 
 Source: header of `diff-src/diffreg.c`. **This is the file carrying the advertising clause discussed above.**
 
-```
+```text noah:ignore
 /*	$OpenBSD: diffreg.c,v 1.96 2026/04/01 17:47:46 deraadt Exp $	*/
 
 /*

@@ -1,0 +1,9 @@
+# Noah: a word excused in one exact context, and nowhere else.
+# Format: word:the literal text that excuses it:which files
+#
+# Both entries below are real names that happen to be spelled the British way.
+# Renaming either would break a link or point at a file that does not exist.
+
+# zsh ships its license as LICENCE, and that is the filename.
+licence:zsh-5.9/LICENCE:*
+licence:tree/LICENCE:*

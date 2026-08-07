@@ -1,0 +1,47 @@
+# Noah: paths to skip. Gitignore syntax.
+#
+# The rule behind this list: we do not spellcheck code we did not write and do
+# not intend to edit. Changing a comment in a vendored source would add noise to
+# the diff against upstream, which is exactly what each PATCHES.md exists to
+# keep small.
+
+# Upstream sources, downloaded by bin/setup and never edited.
+zsh-5.9/
+awk-20260426/
+bc-7.0.3/
+ncurses-stub/
+node_modules/
+
+# Build trees, and the Emscripten loader, which is generated output.
+build-zsh/
+build-sed/
+build-awk/
+build-bc/
+build-sbase/
+build-diff/
+web/zsh.js
+npm/zsh.js
+
+# Vendored C for the compiled builtins. Our own glue is re-included below —
+# those files we did write, so they get checked.
+sed-src/**
+awk-src/**
+bc-src/**
+sbase-src/**
+diff-src/**
+!**/PATCHES.md
+!**/LICENSE
+!**/*_mod.c
+!**/*_embed.c
+!**/*_embed.h
+
+# Verbatim license text. LICENSE reproduces the Zsh license word for word, and a
+# legal notice is not ours to Americanize. THIRD_PARTY_LICENSES.md is NOT here:
+# its quoted texts sit in fenced blocks marked `noah:ignore` instead, so its own
+# prose is still checked.
+/LICENSE
+npm/LICENSE
+npm/THIRD_PARTY_LICENSES.md
+
+# The permit file necessarily contains the spellings it excuses.
+/.noah/
