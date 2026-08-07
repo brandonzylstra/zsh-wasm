@@ -88,3 +88,31 @@ export const IDBFS_MOUNT: string;
 
 /** Built-in zsh function shims prepended to every script (touch, cat, ls, grep, …). */
 export const BUILTINS_PREAMBLE: string;
+
+/**
+ * Returns true if a line of stderr is Emscripten runtime noise rather than
+ * output from the script — unsupported-syscall warnings and the exit-status
+ * message. Useful for filtering what you show a user.
+ *
+ * @example
+ * const { stderr } = await runZshScript('echo hi');
+ * const real = stderr.split('\n').filter(line => !isRuntimeNoise(line));
+ */
+export function isRuntimeNoise(text: string): boolean;
+
+declare global {
+  /**
+   * Optional global configuration, read once when this module is first
+   * imported. Set it **before** the import to change the default filesystem
+   * backend for every call.
+   *
+   * The per-call option takes precedence, so this is only worth using when you
+   * cannot pass options at each call site.
+   *
+   * @example
+   * globalThis.ZshWasmConfig = { fs: 'idbfs' };
+   * const { runZshScript } = await import('@brandon.zylstra/zsh-wasm');
+   */
+  // eslint-disable-next-line no-var
+  var ZshWasmConfig: { fs?: 'memfs' | 'idbfs' } | undefined;
+}

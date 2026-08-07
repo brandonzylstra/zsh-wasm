@@ -403,6 +403,18 @@ class WorkerPool {
     }
 
     #spawn() {
+        // This package is browser-only: it needs the DOM Worker constructor,
+        // which Node.js does not have (its equivalent lives in worker_threads
+        // and takes a different argument). Without this check a Node caller
+        // gets "Worker is not defined" from inside a private method, which
+        // says nothing about why.
+        if (typeof Worker === 'undefined') {
+            throw new Error(
+                'zsh-wasm requires a browser environment: no global Worker constructor was found. ' +
+                'This package uses Web Workers and import.meta.url, and does not support Node.js. ' +
+                'If you are running under a bundler, make sure the code is in a browser-targeted bundle.'
+            );
+        }
         const w = new Worker(new URL('./zsh-worker.js', import.meta.url));
         this.#all.push(w);
         w.onmessage = ({ data }) => {
