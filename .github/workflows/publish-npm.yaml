@@ -48,6 +48,18 @@ jobs:
             cp "web/$builtFile" "npm/$builtFile"
           done
 
+          # The wasm binary combines six third-party codebases, so the notices
+          # for them have to ship inside the tarball. Both files are tracked at
+          # the repository root and copied in here, the same way bin/build does
+          # for a local `--out npm/`.
+          for licenseFile in LICENSE THIRD_PARTY_LICENSES.md; do
+            if [ ! -f "$licenseFile" ]; then
+              echo "MISSING: $licenseFile at this tag — cannot publish" >&2
+              exit 1
+            fi
+            cp "$licenseFile" "npm/$licenseFile"
+          done
+
       - name: Publish
         working-directory: npm
         run: npm publish --provenance --access public

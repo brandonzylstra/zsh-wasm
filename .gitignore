@@ -19,6 +19,10 @@ npm/zsh.js
 npm/zsh.wasm
 npm/zsh-runtime.js
 npm/zsh-worker.js
+# Copied from the repository root at publish time; the root copies are the
+# originals and are tracked.
+npm/LICENSE
+npm/THIRD_PARTY_LICENSES.md
 node_modules/
 package-lock.json
 test-results/

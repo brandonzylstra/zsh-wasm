@@ -819,10 +819,15 @@ if (( DEBUG )) && [[ -f Src/zsh.wasm.map ]]; then
     cp Src/zsh.wasm.map "$OUT_DIR/zsh.wasm.map"
 fi
 
-# When deploying outside web/, also copy the runtime JS files that live there.
+# When deploying outside web/, also copy the runtime JS files that live there,
+# and the license notices. The wasm binary combines six third-party codebases
+# (see THIRD_PARTY_LICENSES.md), so those notices have to travel with it
+# wherever it is deployed.
 if [[ "$OUT_DIR" != "$ROOT/web" ]]; then
     cp "$ROOT/web/zsh-runtime.js" "$OUT_DIR/zsh-runtime.js"
     cp "$ROOT/web/zsh-worker.js"  "$OUT_DIR/zsh-worker.js"
+    cp "$ROOT/LICENSE"                 "$OUT_DIR/LICENSE"
+    cp "$ROOT/THIRD_PARTY_LICENSES.md" "$OUT_DIR/THIRD_PARTY_LICENSES.md"
 fi
 
 SIZE=$(du -h "$OUT_DIR/zsh.wasm" | cut -f1)

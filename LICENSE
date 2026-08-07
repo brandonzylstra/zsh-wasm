@@ -1,0 +1,96 @@
+zsh-wasm — License
+==================
+
+zsh-wasm is distributed under the Zsh license.
+
+This file covers **zsh-wasm's own code**: the build scripts in `bin/`, the
+JavaScript runtime in `web/` (`zsh-runtime.js`, `zsh-worker.js`, `zsh-loader.js`,
+`index.html`, `test.html`), the npm package metadata in `npm/`, the embedding
+glue written for this project (`embed/`, the `*_mod.c`, `*_embed.[ch]` and
+`*.mdd` files under `awk-src/`, `sed-src/`, `bc-src/`, `sbase-src/` and
+`diff-src/`), and the documentation.
+
+zsh-wasm also **bundles six third-party codebases**, compiled together into the
+single `zsh.wasm` binary this project publishes. They are all permissively
+licensed, but they are not all under this license, and two of them carry terms
+about the use of a name in advertising.
+
+**Those texts are in `THIRD_PARTY_LICENSES.md`, and they travel with the
+binary.** Redistributing `zsh.wasm` — or the npm package, or a bundle built from
+it — means redistributing all six, and that file carries the notices they
+require. Ship it alongside.
+
+
+zsh-wasm's own code
+-------------------
+
+Copyright (c) 2026 Brandon Zylstra.
+
+Permission is hereby granted, without written agreement and without
+license or royalty fees, to use, copy, modify, and distribute this
+software and to distribute modified versions of this software for any
+purpose, provided that the above copyright notice and the following
+two paragraphs appear in all copies of this software.
+
+In no event shall the above-named copyright holder be liable to any party for
+direct, indirect, special, incidental, or consequential damages arising out
+of the use of this software and its documentation, even if the above-named
+copyright holder has been advised of the possibility of such damage.
+
+The above-named copyright holder specifically disclaims any warranties,
+including, but not limited to, the implied warranties of merchantability and
+fitness for a particular purpose.  The software provided hereunder is on an
+"as is" basis, and the above-named copyright holder has no obligation to
+provide maintenance, support, updates, enhancements, or modifications.
+
+
+Zsh itself
+----------
+
+What follows is the license file shipped with the Zsh 5.9 sources, reproduced
+verbatim. The grant above is modeled on it.
+
+Its paragraph about GNU-licensed shell functions does not apply to this project.
+zsh-wasm compiles zsh's C sources and loadable modules only. No files from zsh's
+shell-function library are compiled into `zsh.wasm` or shipped in the npm
+package — the build embeds no data files into the binary's filesystem at all.
+
+----------------------------------------------------------------------
+
+Unless otherwise noted in the header of specific files, files in this
+distribution have the licence shown below.
+
+However, note that certain shell functions are licensed under versions
+of the GNU General Public Licence.  Anyone distributing the shell as a
+binary including those files needs to take account of this.  Search
+shell functions for "Copyright" for specific copyright information.
+None of the core functions are affected by this, so those files may
+simply be omitted.
+
+--
+
+The Z Shell is copyright (c) 1992-2017 Paul Falstad, Richard Coleman,
+Zoltán Hidvégi, Andrew Main, Peter Stephenson, Sven Wischnowsky, and
+others.  All rights reserved.  Individual authors, whether or not
+specifically named, retain copyright in all changes; in what follows, they
+are referred to as `the Zsh Development Group'.  This is for convenience
+only and this body has no legal status.  The Z shell is distributed under
+the following licence; any provisions made in individual files take
+precedence.
+
+Permission is hereby granted, without written agreement and without
+licence or royalty fees, to use, copy, modify, and distribute this
+software and to distribute modified versions of this software for any
+purpose, provided that the above copyright notice and the following
+two paragraphs appear in all copies of this software.
+
+In no event shall the Zsh Development Group be liable to any party for
+direct, indirect, special, incidental, or consequential damages arising out
+of the use of this software and its documentation, even if the Zsh
+Development Group have been advised of the possibility of such damage.
+
+The Zsh Development Group specifically disclaim any warranties, including,
+but not limited to, the implied warranties of merchantability and fitness
+for a particular purpose.  The software provided hereunder is on an "as is"
+basis, and the Zsh Development Group have no obligation to provide
+maintenance, support, updates, enhancements, or modifications.

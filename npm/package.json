@@ -16,8 +16,13 @@
     "zsh-runtime.js",
     "zsh-worker.js",
     "zsh.js",
-    "zsh.wasm"
+    "zsh.wasm",
+    "LICENSE",
+    "THIRD_PARTY_LICENSES.md"
   ],
+  "scripts": {
+    "prepublishOnly": "node check-built.js"
+  },
   "keywords": [
     "zsh",
     "shell",
@@ -26,7 +31,7 @@
     "browser",
     "emscripten"
   ],
-  "license": "Zsh",
+  "license": "SEE LICENSE IN LICENSE",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/brandonzylstra/zsh-wasm.git"
