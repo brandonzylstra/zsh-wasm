@@ -1,70 +1,149 @@
-# npm Publish Checklist
+npm Publish Checklist
+=====================
 
-This document tracks everything that must be done before publishing `zsh-wasm`
-to the npm registry. Work through each item in order; later items depend on
-earlier ones being settled.
+This started as a list of things to do before the first publish. The package
+published anyway, several times, while most of the list stayed open — so read
+the status column, not the fact that an item exists.
 
----
-
-## Quick Checklist
-
-### Blockers (must be resolved before any publish)
-
-- [ ] **LICENSE file** — add `LICENSE` to the repo root; fix `"license"` field in `npm/package.json`
-- [ ] **Populate `npm/` with built files** — establish and document the publish workflow
-- [ ] **`prepublishOnly` script** — prevent publishing stale or unbuilt files
-- [ ] **`isRuntimeNoise` type gap** — add to `index.d.ts` or unexport it
-- [ ] **`engines` field** — mark package as browser-only in `package.json`
-- [ ] **Bundler smoke test** — confirm a Vite project can `npm install` and use the package end-to-end
-- [ ] **Version bump** — advance from `0.1.0` to `0.2.0` before first publish
-
-### Should do (high value, low effort)
-
-- [ ] **Document `ZshWasmConfig` global** — or remove it in favour of the per-call `fs` option
-- [ ] **Document wasm asset size** — users need to know what they're pulling in
-- [ ] **Document Node.js non-support** — clear error message or `engines` guard
-- [ ] **Document `BUILTINS_PREAMBLE`** — explain the preamble, how to skip it, and how to override individual shims
-
-### Open decisions (settle before 1.0, ideally before first publish)
-
-- [ ] **Preamble opt-out API** — should `runZshScript(src, { preamble: false })` be supported?
-- [ ] **Wasm delivery** — confirmed bundle-as-npm-asset; document size implications
+**Everything on it is now closed, as of 2026-08-07.** What remains below is the
+reasoning, kept because it explains why each thing is the way it is.
 
 ---
 
-## Detail: Each Item
+Quick Checklist
+---------------
+
+### Blockers — all closed
+
+- [x] **LICENSE file** — `LICENSE` and `THIRD_PARTY_LICENSES.md` at the repo
+      root, both shipped in the package. `"license"` is now
+      `"SEE LICENSE IN LICENSE"`, because no single identifier honestly
+      describes a binary made of six codebases — and `"Zsh"`, which it said for
+      five releases, is not among npm's 695 recognized identifiers at all.
+- [x] **Populate `npm/` with built files** — the tag-push workflow stages them
+      from `web/`; `bin/build --out npm/` does it locally. Both now also copy
+      the two license files.
+- [x] **`prepublishOnly` script** — `npm/check-built.js`. Catches a missing or
+      empty build output, an implausibly small `zsh.wasm`, a missing license
+      file, a `license` field that has been changed back, and — the one that
+      matters most — `npm/*.js` having drifted from `web/*.js`, which is how a
+      publish silently ships stale JavaScript.
+- [x] **`isRuntimeNoise` type gap** — declared. Verified by type-checking a
+      consumer that imports it against the old declarations (TS2305) and the
+      new ones (clean).
+- [x] **`engines` field** — **deliberately not added.** npm only validates
+      `node` and `npm` there, so the proposed `"browser": "*"` would have been
+      silently ignored: a field that looks like a guard and guards nothing.
+      Replaced with a thrown error naming the actual problem, plus a README
+      section.
+- [x] **Bundler smoke test** — done, and it found a real bug. See below.
+- [x] **Version bump** — long since overtaken; the package is past 0.5.0.
+
+### Should do — all closed
+
+- [x] **Document `ZshWasmConfig` global** — kept rather than removed, and
+      documented in both the package README and `index.d.ts`. It earns its keep
+      for callers who cannot reach every call site.
+- [x] **Document wasm asset size** — measured, not estimated: 1.34 MB raw,
+      554 KB gzipped, ~610 KB gzipped over the wire with the loader. Every
+      earlier "~900 KB" in these docs predated sed, awk, bc, diff and the
+      seventeen coreutils.
+- [x] **Document Node.js non-support** — README, plus an error that says so.
+- [x] **Document `BUILTINS_PREAMBLE`** — what is in it, and that a user's own
+      function of the same name wins because the preamble is prepended. Both
+      verified with `bin/run-script`, not assumed.
+
+### Open decisions — settled
+
+- [x] **Preamble opt-out API** — Option C (status quo): no flag. The preamble is
+      always prepended, `BUILTINS_PREAMBLE` is exported, and redefining a shim
+      in your own script already overrides it. Revisit if someone reports a
+      conflict that this does not cover.
+- [x] **Wasm delivery** — bundle as npm asset, size documented.
+
+---
+
+What the bundler smoke test found (2026-08-07)
+----------------------------------------------
+
+Worth recording, because it is the reason to run a smoke test at all rather than
+reason about one.
+
+Both READMEs had said since 0.1.x that Vite and Webpack 5 "handle automatically"
+the way this package loads. Building a project that installed the published
+tarball produced a `dist/` with the worker chunk and nothing else — no `zsh.js`,
+no `zsh.wasm` — and the page hung on a 404 for `/assets/zsh.js`. **Five releases
+shipped in a state where no bundled build could ever have worked**, because
+nobody had built the package through a bundler.
+
+The cause was one line: the worker loaded the Emscripten runtime with
+`importScripts('./zsh.js')`. A bundler cannot see a dependency inside a string,
+so it emitted neither the loader nor the wasm the loader then fetches.
+
+The fix moved both URLs into `new URL(..., import.meta.url)` expressions in
+`zsh-runtime.js`, which bundlers do read statically, and passes them to the
+worker in an `init` message. `locateFile` is set from the same message, so a
+content-hashed `zsh-XVyxQy0i.wasm` is still found — Emscripten would otherwise
+derive the name from the hashed loader and miss.
+
+Verified after the fix: a Vite 5 build with no configuration emits all four
+files and runs zsh 5.9, a `sort | tr` pipeline, `bc` from a pipe and `diff -u`
+from a pipe, exit code 0, no failed requests. The unbundled path was unchanged
+at 351 passing and 2 known-fail.
+
+**The lesson for next time:** the test project must install a real tarball
+(`npm pack` then install the `.tgz`), not a `file:` reference to `npm/`. A
+`file:` dependency symlinks, which resolves paths the way the repository does
+and hides exactly this class of bug.
+
+---
+
+Detail: Each Item
+-----------------
 
 ---
 
 ### LICENSE file
 
-**Status:** missing from repo root.
+**Status: DONE (2026-08-07).** `LICENSE` and `THIRD_PARTY_LICENSES.md` are at
+the repo root and ship inside the package. Was: missing from repo root.
 
-The npm registry requires a `license` field. The current `"license": "Zsh"` in
-`npm/package.json` is not a valid SPDX identifier and will produce a registry
-warning. The project bundles three components with different licenses:
+The npm registry requires a `license` field. `"license": "Zsh"` was not a valid
+SPDX identifier — checked against the list npm validates against, which has 695
+entries and nothing matching "zsh" at all — so the registry showed it as
+unrecognized for five releases.
 
-| Component | License |
-|-----------|---------|
-| Zsh 5.9 (`zsh-5.9/LICENCE`) | MIT-like (Zsh Development Group) |
-| OpenBSD sed (`sed-src/`) | BSD-3-Clause |
-| one-true-awk (`awk-20260426/LICENSE`) | Lucent Technologies (permissive, not OSI-named) |
-| glue code (`web/`, `awk-src/`, `sed-src/*.c` wrappers) | choose a license (MIT recommended) |
+What this section originally listed as three bundled components turned out to be
+six, since bc, sbase and diff all landed afterwards. The full and current list
+is in `THIRD_PARTY_LICENSES.md`; the table below is left as written at the time:
 
-**Action:**
+| Component                                              | License                                         |
+| ------------------------------------------------------ | ----------------------------------------------- |
+| Zsh 5.9 (`zsh-5.9/LICENCE`)                            | MIT-like (Zsh Development Group)                |
+| OpenBSD sed (`sed-src/`)                               | BSD-3-Clause                                    |
+| one-true-awk (`awk-20260426/LICENSE`)                  | Lucent Technologies (permissive, not OSI-named) |
+| glue code (`web/`, `awk-src/`, `sed-src/*.c` wrappers) | choose a license (MIT recommended)              |
 
-1. Decide the license for the glue code (MIT is simplest and most compatible).
-2. Create `LICENSE` at the repo root with the glue code license.
-3. Create `npm/THIRD_PARTY_LICENSES` (or similar) listing the three bundled
-   licenses verbatim — required for the Lucent license.
-4. Change `npm/package.json` `"license"` to `"MIT"` (or whatever matches the
-   glue code license).
+**What was actually done:**
+
+1. The glue code is under the Zsh license, not MIT — Brandon had already chosen
+   that, and matching the interpreter keeps the story simple.
+2. `LICENSE` at the repo root carries that grant plus the Zsh license verbatim.
+3. `THIRD_PARTY_LICENSES.md` at the repo root carries all six texts, each
+   extracted from the source file it governs rather than transcribed, so they
+   are byte-exact. Both files ship in the package and are copied into `npm/` by
+   `bin/build --out` and by the publish workflow.
+4. `"license"` is `"SEE LICENSE IN LICENSE"` — npm's own convention for a
+   custom or combined license, and the honest answer for a binary made of six
+   codebases.
 
 ---
 
 ### Populate `npm/` with built files
 
-**Status:** `npm/` currently contains only `package.json` and `index.d.ts`.
+**Status: DONE.** The workflow stages the built files from `web/` on a tag push,
+and copies the two license files in as well. Was: `npm/` contained only
+`package.json` and `index.d.ts`.
 The runtime files (`zsh-runtime.js`, `zsh-worker.js`, `zsh.js`, `zsh.wasm`)
 must be built and copied there before publishing.
 
@@ -76,7 +155,8 @@ bin/build [--with-sed] [--with-awk] --out npm/
 
 This runs the full wasm build and then copies four files into `npm/`:
 - `zsh.js` (Emscripten loader)
-- `zsh.wasm` (~900 KB uncompressed, ~290 KB gzipped)
+- `zsh.wasm` (1.34 MB uncompressed, 554 KB gzipped as of 0.6.0; the
+  "~900 KB" this said before predates bc, diff and the seventeen coreutils)
 - `zsh-runtime.js` (copied from `web/`)
 - `zsh-worker.js` (copied from `web/`)
 
@@ -99,7 +179,8 @@ This runs the full wasm build and then copies four files into `npm/`:
 
 ### `prepublishOnly` script
 
-**Status:** `npm/package.json` has no `scripts` field.
+**Status: DONE.** `npm/check-built.js`, wired to `prepublishOnly`. It goes
+further than this section proposed — see the staleness check below.
 
 Without a guard, `npm publish` from the `npm/` directory will happily publish
 whatever is (or isn't) there.
@@ -118,7 +199,9 @@ Or write a small `npm/check-built.js` script and call it from `prepublishOnly`.
 
 ### `isRuntimeNoise` type gap
 
-**Status:** `zsh-runtime.js` exports `isRuntimeNoise` but `index.d.ts` does not
+**Status: DONE.** Declared, and the gap confirmed real first: the same consumer
+fails with TS2305 against the old declarations and type-checks clean against the
+new ones. Was: `zsh-runtime.js` exported `isRuntimeNoise` but `index.d.ts` did not
 declare it. TypeScript users who import it get a type error.
 
 ```js
@@ -145,7 +228,10 @@ export function isRuntimeNoise(text: string): boolean;
 
 ### `engines` field
 
-**Status:** `npm/package.json` has no `engines` field. The package uses
+**Status: CLOSED — deliberately not done.** npm validates only `node` and `npm`
+in `engines`, so the `"browser": "*"` proposed below would be silently ignored:
+a field that looks like a guard and guards nothing. What shipped instead is a
+thrown error naming the real problem, plus a README section. The package uses
 `new Worker(...)` and `import.meta.url`, which do not exist in Node.js.
 A Node.js user who installs the package will get a cryptic runtime error.
 
@@ -166,7 +252,10 @@ And add to the README's npm section:
 
 ### Bundler smoke test
 
-**Status:** The package works when loaded from `web/index.html` directly, but
+**Status: DONE, and it found a real bug** — see "What the bundler smoke test
+found" at the top of this file. The risks guessed at below were close: the wasm
+resolution was indeed the problem, though the loader went missing first. Was:
+the package worked when loaded from `web/index.html` directly, but
 has never been tested as an installed npm package inside a real bundler project.
 
 The key risk: Vite, Webpack 5, and esbuild all handle
@@ -194,7 +283,8 @@ hashing), the package breaks silently.
 
 ### Version bump
 
-**Status:** `npm/package.json` is at `0.1.0`. This was set before sed, awk, 13
+**Status: OVERTAKEN.** The package is well past this; the version policy below
+still holds. Was: `npm/package.json` at `0.1.0`, set before sed, awk, 13
 shims, and 159 tests existed. Publishing `0.1.0` now would be misleading.
 
 **Action:** Bump to `0.2.0` in `npm/package.json` before the first publish.
@@ -210,7 +300,8 @@ Version policy (confirmed):
 
 ### Document `ZshWasmConfig` global
 
-**Status:** `zsh-runtime.js` reads `globalThis.ZshWasmConfig?.fs` at module
+**Status: DONE — Option A.** Kept and documented in the package README and in
+`index.d.ts`. `zsh-runtime.js` reads `globalThis.ZshWasmConfig?.fs` at module
 load time to set the default filesystem backend. This is not documented in the
 README's npm section or in `index.d.ts`.
 
@@ -252,7 +343,9 @@ verbose for callers who always want IDBFS.
 
 ### Document wasm asset size
 
-**Status:** Not mentioned in the npm section of the README.
+**Status: DONE.** Measured rather than estimated: 1.34 MB raw, 554 KB gzipped,
+~610 KB over the wire with the loader. Note every "~900 KB" below is stale — it
+predates bc, diff and the seventeen coreutils.
 
 The package ships a ~900 KB `.wasm` file (~290 KB gzipped). Users should know
 this before installing. The default build excludes ZLE/completion; `--with-sed`
@@ -273,7 +366,8 @@ fully-featured build; the size difference (~1 MB total) is acceptable.
 
 ### Document Node.js non-support
 
-**Status:** Not mentioned anywhere prominently.
+**Status: DONE.** Stated in both READMEs, and `runZshScript` now throws an error
+that says the package is browser-only instead of failing on an undefined global.
 
 **Action:** One sentence in the README npm section and in the `engines` field
 (see above). Also consider adding a runtime check at the top of `zsh-worker.js`
@@ -283,7 +377,9 @@ that throws a clear error if loaded outside a browser context.
 
 ### Document `BUILTINS_PREAMBLE`
 
-**Status:** `BUILTINS_PREAMBLE` is exported and declared in `index.d.ts` with a
+**Status: DONE.** The package README now covers what is in the preamble and that
+redefining a shim in your own script overrides it — verified with
+`bin/run-script`, not assumed. Was: `BUILTINS_PREAMBLE` exported and declared with a
 brief comment, but there's no explanation of what it is, why someone would use
 it, or how to work around it.
 
@@ -313,7 +409,10 @@ const customPreamble = BUILTINS_PREAMBLE + '\ngrep() { my_grep "$@" }\n';
 
 ### Preamble opt-out API
 
-**Status:** Open decision (see ROADMAP — "Shim architecture decision").
+**Status: SETTLED — Option C.** No opt-out flag. The preamble is always
+prepended, `BUILTINS_PREAMBLE` is exported, and defining your own function of the
+same name already overrides the shim. Revisit only on a concrete report this
+does not cover.
 
 Currently `BUILTINS_PREAMBLE` is always prepended. There is no way to skip it
 without constructing the raw script yourself. The exported `BUILTINS_PREAMBLE`
@@ -348,7 +447,8 @@ the `.wasm` file is emitted as a static asset (not inlined or renamed).
 
 ---
 
-## Publish Workflow (once all blockers are resolved)
+Publish Workflow (once all blockers are resolved)
+-------------------------------------------------
 
 ```sh
 # 1. Build the wasm (requires Emscripten)
@@ -373,7 +473,8 @@ missing, preventing accidental publishes of incomplete packages.
 
 ---
 
-## Not Blocking (defer to ROADMAP)
+Not Blocking (defer to ROADMAP)
+-------------------------------
 
 These items appear in ROADMAP.md as open questions. They do not need to be
 resolved before the first publish:

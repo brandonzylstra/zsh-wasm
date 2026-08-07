@@ -217,7 +217,7 @@ Source: `bc-7.0.3/` (downloaded from GitHub); `bc-src/` holds the patched copy.
 
 ## Planned
 
-### Shim architecture decision
+### Shim architecture decision ✓ settled 2026-08-07
 
 `BUILTINS_PREAMBLE` is exported as a string constant — it is prepended to every
 script by `runZshScript()` automatically. Users who construct scripts that
@@ -228,11 +228,16 @@ override individual shims. Options to decide:
 - **Opt-out**: `runZshScript(src, { preamble: false })`
 - **Selective override**: export preamble as a mutable dict, let users delete keys
 
-Decision deferred until someone reports a concrete conflict.
+**Decided: status quo.** No opt-out flag. The preamble is always prepended,
+`BUILTINS_PREAMBLE` is exported for inspection, and defining your own function of
+the same name in your script already overrides the shim — the preamble comes
+first, so a later definition wins. That covers the case this section was worried
+about, verified rather than assumed. Revisit only on a concrete report it does
+not cover.
 
 ---
 
-### Remaining shim gaps
+### Remaining shim gaps ✓ closed
 
 Common Unix utilities not yet shimmed. The bar is: used frequently enough in
 real scripts, and implementable without forking.
@@ -241,20 +246,36 @@ Candidates:
 - `printf` (already a zsh builtin — no shim needed)
 - `find` ✓ done — zsh glob recursion
 - `xargs` ✓ done — default, `-I STR`, `-n N`
-- `tee` ✓ done
+- `tee` ✓ done — and since superseded: `tee` is a compiled sbase builtin now,
+  along with sixteen others. See item 6d in `docs/PLAN.md` for what stayed a
+  shim and why (`find`, `xargs`, `env`, `which`, `date`, `sleep`, the
+  `zsh/files` delegations, `realpath` and `base64`).
 
 ---
 
-### TypeScript types (planned, pre-npm-publish)
+### TypeScript types ✓ done
 
-`npm/index.d.ts` already declares the public API. Needs review:
-- Is `RunOptions.fs` well-documented enough?
-- Should `BUILTINS_PREAMBLE` type be `string` or a structured type?
-- Add JSDoc comments to the `.d.ts` before publishing.
+`npm/index.d.ts` declares the public API with JSDoc throughout. The review
+questions this section raised are answered:
+- `RunOptions.fs` documents both backends and what persists where.
+- `BUILTINS_PREAMBLE` stays `string`. It is a zsh script, and a structured type
+  would imply an editing API that does not exist.
+- `isRuntimeNoise` and the `ZshWasmConfig` global are now declared too — both
+  were missing, and a consumer importing them failed to compile (TS2305 and
+  TS7017). Checked by type-checking a consumer that uses every export against
+  the old declarations and the new.
 
 ---
 
-### npm publish prerequisites ✓ done
+### npm publish prerequisites ✓ done (but see the correction below)
+
+> **Correction, 2026-08-07.** This section said "done" while `docs/NPM.md` still
+> listed seven unresolved blockers, and both were partly right: the five numbered
+> points below were genuinely done, but the LICENSE file, the `prepublishOnly`
+> guard, the `isRuntimeNoise` declaration and the bundler smoke test were not,
+> and stayed undone through five releases. The smoke test in particular would
+> have caught a bug that made every bundled build fail. All of it is closed now;
+> `docs/NPM.md` is the authoritative record.
 
 1. TypeScript types reviewed and documented ✓
 2. Shim table complete: all shimmed utilities listed with correct flag columns;
@@ -262,9 +283,10 @@ Candidates:
 3. README has quick-start example and Known Limitations (incl. subshell isolation) ✓
 4. **Version policy**: `0.x` until `1.0`. No stability guarantee on the API before
    `1.0`. Breaking changes get a minor-version bump (e.g. `0.2.0`). ✓
-5. **Wasm delivery**: bundle as npm asset (current). `.wasm` is ~900 KB
-   uncompressed / ~300 KB gzip'd. CDN and user-supplied-path options deferred
-   until there is user demand. ✓
+5. **Wasm delivery**: bundle as npm asset (current). `.wasm` is 1.34 MB
+   uncompressed / 554 KB gzip'd as of 0.6.0 — the "~900 KB / ~300 KB" this said
+   before predates bc, diff and the seventeen coreutils. CDN and
+   user-supplied-path options deferred until there is user demand. ✓
 
 ---
 
@@ -272,8 +294,8 @@ Candidates:
 
 ### Wasm delivery strategy ✓ decided
 
-**Decision**: bundle as npm asset. `.wasm` ships inside the package (~900 KB
-uncompressed, ~300 KB gzip'd). CDN and user-supplied-path options deferred until
+**Decision**: bundle as npm asset. `.wasm` ships inside the package (1.34 MB
+uncompressed, 554 KB gzip'd as of 0.6.0). CDN and user-supplied-path options deferred until
 there is user demand — they would require an API change and are not needed for
 the primary use case.
 

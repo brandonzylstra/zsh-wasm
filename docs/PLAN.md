@@ -170,8 +170,8 @@ from `IFS= read -r -d '' content` instead of `$(<$f)`.
 
 ---
 
-1g. `tail -n +N` and `sort -t` (done)
---------------------------------------
+1g. tail -n +N and sort -t (done)
+---------------------------------
 
 Both found by writing one ordinary CSV script against the new pipeline support,
 which is a fair comment on how much the shims had been exercised by realistic
@@ -197,7 +197,7 @@ Tests: `tail-from-line`, `tail-from-line-stdin`, `tail-from-line-past-end`,
 ---
 
 1f. Empty input produced a line that was not there (done)
-----------------------------------------------------------
+---------------------------------------------------------
 
 Same family as 1d, and the one it missed. `${(@f)text}` splits the empty string
 into one empty element, so with empty input `sort`, `uniq`, `head`, `tail`,
@@ -221,8 +221,8 @@ Tests: `empty-input-wc`, `empty-input-no-blank-line`, `empty-line-preserved`,
 
 ---
 
-1e. `setopt errexit` compatibility in the shims (done)
-------------------------------------------------------
+1e. setopt errexit compatibility in the shims (done)
+----------------------------------------------------
 
 Found while sweeping for pipeline regressions, but pre-existing and unrelated to
 pipelines: under `setopt errexit` (`set -e`) — which real scripts use constantly —
@@ -487,9 +487,19 @@ which is the fallback if the term is unwelcome.
 - [x] Tests: identical files, insertions, deletions, changes, `-u`, `-c`, `-e`,
       `-q`, `-i`, `-w`, `-r`, stdin, pipelines, missing file, re-entrancy
 - [x] Update README, `CLAUDE.md`, `docs/CODECOMPARED.md`, `diff-src/PATCHES.md`
-- [ ] Brandon to accept or decline the Caldera advertising clause
+- [x] Brandon to accept or decline the Caldera advertising clause — **accepted,
+      2026-08-07.** Put to him with the three options (accept and document, swap
+      to toybox's 0BSD diff, or drop diff); his answer was that he had no basis
+      to choose, so the call was made on the facts: the clause binds advertising
+      material only, distribution does not trigger it, and every BSD and macOS
+      has shipped this file under this term for twenty years. The only real cost
+      is that some corporate license scanners flag 4-clause BSD as non-approved,
+      which produces a conversation rather than a violation — a smaller price
+      than re-porting diff from toybox. Reversible: the acknowledgement is a
+      notice, not a design commitment. Recorded in `README.md` and
+      `THIRD_PARTY_LICENSES.md`.
 
-**Obstacles that did not materialise:** the temp files diff uses for
+**Obstacles that did not materialize:** the temp files diff uses for
 non-seekable input work fine on MEMFS, and memory was never a concern at the
 sizes a cheatsheet example uses.
 
@@ -565,7 +575,7 @@ Tests: `pipe-sed-twice`, `pipe-awk-twice`, `pipe-bc-twice`.
 ---
 
 6c. Historical: approaches considered
---------------------------------------
+-------------------------------------
 
 **Approaches investigated** (kept for the record; Option E is what shipped):
 
@@ -637,7 +647,7 @@ lines=("${(@f)$(echo hello)}"); for l in $lines; do [[ $l =~ hello ]] && echo $l
 ---
 
 6d. Replace the coreutils shims with compiled binaries
--------------------------------------------------------
+------------------------------------------------------
 
 **Status:** Open. The remaining half of the "stop working around no-fork and
 fix it properly" pair — pipelines were the other half and are now done (6 above).
@@ -734,11 +744,11 @@ treat those alike.
 **Size**, measured rather than estimated (`SBASE_TOOLS=wc bin/build --with-sbase`
 builds a subset for exactly this):
 
-| build                        | zsh.wasm    | delta      |
-| ---------------------------- | ----------- | ---------- |
-| baseline (shims only)        | 1291.0 KB   | —          |
-| + sbase `wc`                 | 1295.3 KB   | **+4.3 KB** |
-| + sbase `wc`, `sort`, `cut`  | 1315.3 KB   | +24.3 KB   |
+| build                       | zsh.wasm  | delta       |
+| --------------------------- | --------- | ----------- |
+| baseline (shims only)       | 1291.0 KB | —           |
+| + sbase `wc`                | 1295.3 KB | **+4.3 KB** |
+| + sbase `wc`, `sort`, `cut` | 1315.3 KB | +24.3 KB    |
 
 So 4.3 KB buys the shared `libutil`/`libutf`/glue *and* wc, and the two richer
 tools cost about 10 KB each. A straight-line extrapolation over 27 commands
@@ -789,12 +799,12 @@ Seventeen tools compiled in and their shims deleted: `wc`, `sort`, `cut`, `head`
 `dirname`, `printenv`, `grep`. `bin/build --with-sbase` is now part of the
 shipped build.
 
-| | before | after |
-| --- | --- | --- |
-| `zsh.wasm` | 1291.0 KB | 1343.3 KB (+52.3 KB, +4.1%) |
-| `BUILTINS_PREAMBLE` | 32.1 KB | 17.6 KB (−14.5 KB, −45%) |
-| preamble parse, per run | 9.5 ms | 7.7 ms |
-| tests | 296 | 317, same 2 known-fail |
+|                         | before    | after                       |
+| ----------------------- | --------- | --------------------------- |
+| `zsh.wasm`              | 1291.0 KB | 1343.3 KB (+52.3 KB, +4.1%) |
+| `BUILTINS_PREAMBLE`     | 32.1 KB   | 17.6 KB (−14.5 KB, −45%)    |
+| preamble parse, per run | 9.5 ms    | 7.7 ms                      |
+| tests                   | 296       | 317, same 2 known-fail      |
 
 The marginal cost fell sharply after the first three: 4.3 KB bought the shared
 `libutil`/`libutf` and `wc`, the next two cost ~10 KB each, and the remaining
@@ -821,15 +831,15 @@ cases. `sbase-src/PATCHES.md` lists all eight upstream patches.
 
 **Deliberately not ported**, with reasons:
 
-| Command | Why the shim stays |
-| --- | --- |
-| `find` | 1103 lines and 105 statics for a glob the shim already does; `-exec` needs `fork()` anyway |
-| `xargs`, `env` | both run a command, which without `exec()` only the shell can do |
-| `which` | ours knows about shell functions and builtins; a PATH search does not |
-| `date` | ours goes through `zsh/datetime` and the browser's timezone |
-| `sleep` | ours blocks for real via `Atomics.wait()` in the worker |
-| `cp`, `mv`, `rm`, `ln` | one-line delegations to `zsh/files` builtins; nothing to gain |
-| `realpath`, `base64` | sbase has neither |
+| Command                | Why the shim stays                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------ |
+| `find`                 | 1103 lines and 105 statics for a glob the shim already does; `-exec` needs `fork()` anyway |
+| `xargs`, `env`         | both run a command, which without `exec()` only the shell can do                           |
+| `which`                | ours knows about shell functions and builtins; a PATH search does not                      |
+| `date`                 | ours goes through `zsh/datetime` and the browser's timezone                                |
+| `sleep`                | ours blocks for real via `Atomics.wait()` in the worker                                    |
+| `cp`, `mv`, `rm`, `ln` | one-line delegations to `zsh/files` builtins; nothing to gain                              |
+| `realpath`, `base64`   | sbase has neither                                                                          |
 
 ### grep: evaluated 2026-08-01, ported 2026-08-02
 
@@ -907,11 +917,11 @@ downloads. Should optional tools be loadable on demand instead?
 
 ### What one binary actually costs (measured 2026-08-03)
 
-| Build                                                     | `zsh.wasm` |
-| --------------------------------------------------------- | ---------- |
-| slim — `bin/build` with no flags                            | 926.7 KB   |
-| shipped — sed, awk, bc, 17 sbase tools, diff                | 1376.9 KB  |
-| **everything the flags add**                                | **450.2 KB** |
+| Build                                        | `zsh.wasm`   |
+| -------------------------------------------- | ------------ |
+| slim — `bin/build` with no flags             | 926.7 KB     |
+| shipped — sed, awk, bc, 17 sbase tools, diff | 1376.9 KB    |
+| **everything the flags add**                 | **450.2 KB** |
 
 450 KB is the entire prize. It is worth holding that number in mind, because it
 is smaller than the machinery proposed to save it.
@@ -973,7 +983,7 @@ the case a slim package would serve.
 
 ### Option D: a second complete binary, chosen at load time (new)
 
-The realisation from the spike: nothing about "load jq only when a script uses
+The realization from the spike: nothing about "load jq only when a script uses
 it" requires *dynamic linking*. It requires two artifacts and a rule for picking
 one.
 
@@ -1062,23 +1072,23 @@ shared zsh, and only readers of jq examples pay for it.
 Priority Order Summary
 ----------------------
 
-| #   | Item                       | State     | Notes                                            |
-| --- | -------------------------- | --------- | ------------------------------------------------ |
-| 1a  | zsh/mathfunc static build  | done      |                                                  |
-| 1b  | grep shim stdin            | done      |                                                  |
-| 1c  | wc/cat stdin               | done      |                                                  |
-| 1d  | stdin/pipe bugs in shims   | done      |                                                  |
-| 1e  | errexit safety in shims    | done      |                                                  |
-| 1f  | empty-input phantom lines  | done      |                                                  |
-| 1g  | `tail -n +N`, `sort -t`    | done      |                                                  |
-| 2   | Compiled grep              | done      | sbase's, BRE by default; `-E` for extended        |
-| 3   | Compiled bc                | done      |                                                  |
-| 4   | find shim                  | done      |                                                  |
-| 5   | Compiled diff              | done      | OpenBSD's; check `diff-src/LICENSE` before shipping |
-| 6   | Pipelines without fork()   | done      | the big one                                       |
-| 6b  | Compiled tools re-entrant  | done      |                                                  |
-| 6d  | Compiled coreutils (sbase) | done      | 17 tools; `find` is the one shim left of the set  |
-| 7   | idbfs testing              | done      |                                                  |
-| 8   | Module install-on-demand   | done      | one binary; dynamic linking costs more than it saves |
-| 9   | jq                         | open      | take item 8's Option D — a second binary, not a side module |
-| 10  | Demo improvements          | done      |                                                  |
+| #   | Item                       | State | Notes                                                       |
+| --- | -------------------------- | ----- | ----------------------------------------------------------- |
+| 1a  | zsh/mathfunc static build  | done  |                                                             |
+| 1b  | grep shim stdin            | done  |                                                             |
+| 1c  | wc/cat stdin               | done  |                                                             |
+| 1d  | stdin/pipe bugs in shims   | done  |                                                             |
+| 1e  | errexit safety in shims    | done  |                                                             |
+| 1f  | empty-input phantom lines  | done  |                                                             |
+| 1g  | `tail -n +N`, `sort -t`    | done  |                                                             |
+| 2   | Compiled grep              | done  | sbase's, BRE by default; `-E` for extended                  |
+| 3   | Compiled bc                | done  |                                                             |
+| 4   | find shim                  | done  |                                                             |
+| 5   | Compiled diff              | done  | OpenBSD's; check `diff-src/LICENSE` before shipping         |
+| 6   | Pipelines without fork()   | done  | the big one                                                 |
+| 6b  | Compiled tools re-entrant  | done  |                                                             |
+| 6d  | Compiled coreutils (sbase) | done  | 17 tools; `find` is the one shim left of the set            |
+| 7   | idbfs testing              | done  |                                                             |
+| 8   | Module install-on-demand   | done  | one binary; dynamic linking costs more than it saves        |
+| 9   | jq                         | open  | take item 8's Option D — a second binary, not a side module |
+| 10  | Demo improvements          | done  |                                                             |
