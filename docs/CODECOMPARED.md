@@ -262,9 +262,30 @@ but only the jsDelivr URL is safe to cache permanently.
 ```
 
 The `cdnUrls` list should include every file the Zsh page fetches from the network.
-`zsh-runtime.js` and `zsh-worker.js` are not listed because they are bundled as
-Astro local assets (content-hashed, handled by the existing local-asset cache).
 Only the external CDN assets need to be listed here.
+
+**`zsh-runtime.js` and `zsh-worker.js` are not listed because CodeCompared never
+loads either one.** This sentence used to say they were "bundled as Astro local
+assets," which was wrong and misleading — corrected 2026-08-07 after reading the
+CodeCompared side. What actually happens:
+
+- `scripts/fetch-zsh-runtime.mjs` slices exactly two things out of
+  `zsh-runtime.js` at build time — `BUILTINS_PREAMBLE` and `isRuntimeNoise` —
+  and writes them into `public/zsh/zsh-shims.js` as a plain, same-origin,
+  non-module script. Astro serves `public/` verbatim, so nothing is bundled and
+  nothing is content-hashed.
+- `runZshScript`, `WorkerPool`, `createPool` and `ansiToHtml` are deliberately
+  left behind. `ZshRunner.astro` drives `createZshModule` directly on the main
+  thread, so **`zsh-worker.js` is never fetched at all.**
+
+Two consequences worth keeping straight. First, CodeCompared was never affected
+by the bundler bug fixed in 0.6.0 — that bug only reaches consumers who install
+the npm package and build it. Second, the vendored preamble and `zsh.wasm` must
+come from the *same tag*: the preamble defines its commands as zsh functions,
+and a function shadows a builtin, so an older preamble silently reinstates a
+stale shim over a compiled tool. `fetch-zsh-runtime.mjs` enforces this by
+reading the pinned tag out of `lib/languages.js` rather than keeping its own
+copy of the version.
 
 **Check whether `zsh.wasm` needs to be listed separately.** The Zsh page loads
 `zsh.js`, which loads `zsh.wasm` from the same path. The service worker intercepts
@@ -314,15 +335,15 @@ pick up the new runtime on their next page load.
 Current Blocking Issues (as of 2026-08-03)
 ------------------------------------------
 
-| Issue                                  | Status                             | Fix                                                                       |
-| -------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------- |
-| ~~`v0.3.1`, `v0.4.0`, `v0.5.0` tagged, not pushed~~ | **Resolved 2026-08-07** | Pushed. `0.4.0` and `0.5.0` published; `0.3.1` was skipped as superseded |
-| `latest` on npm points at `0.4.0` | `npm install` gives the wrong version | `npm dist-tag add @brandon.zylstra/zsh-wasm@0.6.0 latest` after the 0.6.0 publish |
-| No release workflow                    | Reduces release visibility         | Add `release.yml` (optional; `publish-npm.yaml` already publishes on tag) |
-| GitHub Pages URL in `lib/languages.js` | Mutable, unsafe to cache           | Swap after tag is live                                                    |
-| `offlineCapable` not set               | Zsh absent from offline modal      | Set after CDN URL is in place                                             |
-| CodeCompared vendors `simulatePipes()` | Its fetch script throws on ≥ 0.2.0 | See "Breaking change in 0.2.0" above                                      |
-| grep examples using bare `\|` or `+`    | Change meaning on ≥ 0.4.0          | Add `-E`; see "Breaking change in 0.4.0" above                            |
+| Issue                                               | Status                                | Fix                                                                               |                                                |
+| --------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------- | ---------------------------------------------- |
+| ~~`v0.3.1`, `v0.4.0`, `v0.5.0` tagged, not pushed~~ | **Resolved 2026-08-07**               | Pushed. `0.4.0` and `0.5.0` published; `0.3.1` was skipped as superseded          |                                                |
+| `latest` on npm points at `0.4.0`                   | `npm install` gives the wrong version | `npm dist-tag add @brandon.zylstra/zsh-wasm@0.6.0 latest` after the 0.6.0 publish |                                                |
+| No release workflow                                 | Reduces release visibility            | Add `release.yml` (optional; `publish-npm.yaml` already publishes on tag)         |                                                |
+| GitHub Pages URL in `lib/languages.js`              | Mutable, unsafe to cache              | Swap after tag is live                                                            |                                                |
+| `offlineCapable` not set                            | Zsh absent from offline modal         | Set after CDN URL is in place                                                     |                                                |
+| CodeCompared vendors `simulatePipes()`              | Its fetch script throws on ≥ 0.2.0    | See "Breaking change in 0.2.0" above                                              |                                                |
+| grep examples using bare `\                         | ` or `+`                              | Change meaning on ≥ 0.4.0                                                         | Add `-E`; see "Breaking change in 0.4.0" above |
 
 All are resolved by the steps above, in order.
 
