@@ -417,6 +417,18 @@ class WorkerPool {
         }
         const w = new Worker(new URL('./zsh-worker.js', import.meta.url));
         this.#all.push(w);
+
+        // Tell the worker where the Emscripten loader and the wasm binary are.
+        // These two `new URL(..., import.meta.url)` expressions are the whole
+        // reason a bundled build works: a bundler reads them statically, emits
+        // both files as assets, and rewrites the URLs to wherever it put them.
+        // The worker cannot work this out for itself — it only knows its own
+        // (possibly content-hashed) filename.
+        w.postMessage({
+            type:      'init',
+            loaderUrl: new URL('./zsh.js',   import.meta.url).href,
+            wasmUrl:   new URL('./zsh.wasm', import.meta.url).href,
+        });
         w.onmessage = ({ data }) => {
             if (data.type === 'ready') {
                 // Worker finished pre-initializing — dispatch a queued job or park it.

@@ -4,18 +4,43 @@
 // the next module — overlapping init with the caller's processing time.
 // Each run gets a fully fresh module instance, so zsh state never leaks between calls.
 
-importScripts('./zsh.js');
+// The Emscripten loader is NOT pulled in at the top level any more. It used to
+// be `importScripts('./zsh.js')`, a plain runtime string, and a bundler cannot
+// see through that: building this package with Vite produced a dist/ with no
+// zsh.js and no zsh.wasm in it, and the worker died on a 404 for './zsh.js'.
+//
+// Instead the runtime computes both URLs with `new URL(..., import.meta.url)`,
+// which every bundler understands as an asset reference, and sends them here in
+// an 'init' message. Loading is deferred until that message arrives, which is
+// posted the moment the worker is constructed — so pre-initialization still
+// starts immediately and the warm-worker behavior is unchanged.
 
 let _capture          = null;
 let _module           = null;
 let _moduleReady      = null; // Promise<module>, resolved when pre-init finishes
 let _busySleepFallback = false;
+let _wasmUrl          = null; // where zsh.wasm actually lives, from the 'init' message
+let _runtimeLoaded    = false;
+
+function loadRuntime({ loaderUrl, wasmUrl }) {
+    if (_runtimeLoaded) return;
+    _runtimeLoaded = true;
+    _wasmUrl = wasmUrl || null;
+    // The fallback keeps a hand-written worker (or an older caller) working when
+    // no URL is supplied: the loader sits next to this file in that case.
+    importScripts(loaderUrl || './zsh.js');
+    startPreInit();
+}
 
 function startPreInit() {
     // Fresh capture object — closures below reference this specific instance.
     const capture = { out: [], err: [], stdinFn: null };
     _capture = capture;
     _moduleReady = createZshModule({
+        // Emscripten otherwise derives the wasm path from the loader's own
+        // filename, which breaks the moment a bundler content-hashes it
+        // (zsh-a1b2c3.js would send it looking for zsh-a1b2c3.wasm).
+        ...(_wasmUrl ? { locateFile: path => path.endsWith('.wasm') ? _wasmUrl : path } : {}),
         noInitialRun: true,
         print:    txt => capture.out.push(txt),
         printErr: txt => {
@@ -63,10 +88,23 @@ function startPreInit() {
     });
 }
 
-// Begin pre-initializing immediately so the first run arrives to a warm module.
-startPreInit();
+// Pre-initialization now begins on the 'init' message rather than here, because
+// the loader URL arrives with it. The runtime posts it immediately on spawning
+// the worker, so in practice this still starts before any script is submitted.
 
-self.onmessage = async ({ data: { src, fs, idbfsMount, stdin, busySleepFallback } }) => {
+self.onmessage = async ({ data }) => {
+    if (data.type === 'init') {
+        loadRuntime(data);
+        return;
+    }
+
+    const { src, fs, idbfsMount, stdin, busySleepFallback } = data;
+
+    // A run can only arrive before 'init' if a caller built the worker itself.
+    // Fall back to the adjacent loader rather than hanging forever on a
+    // _moduleReady that nothing would ever assign.
+    if (!_runtimeLoaded) loadRuntime({});
+
     _busySleepFallback = !!busySleepFallback;
     await _moduleReady;
     const module  = _module;
