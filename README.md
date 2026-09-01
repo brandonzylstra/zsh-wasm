@@ -19,7 +19,7 @@ npm install zsh-wasm
 import { runZshScript } from 'zsh-wasm';
 
 const { stdout, stderr } = await runZshScript('echo "Hello from zsh $ZSH_VERSION"');
-console.log(stdout); // Hello from zsh 5.9
+console.log(stdout); // Hello from zsh 5.9.2
 
 // Pass stdin
 const { stdout: out } = await runZshScript('while IFS= read -r line; do echo "> $line"; done', {
@@ -59,13 +59,23 @@ How To Build
 ### Prerequisites
 
 - [Emscripten](https://emscripten.org/docs/getting_started/downloads.html) (`emcc`, `emmake`, `emconfigure`)
-- The zsh 5.9 source (`zsh-5.9/` directory — see below)
+- The zsh source (`zsh-5.9.2/` directory — see below). The release is named once,
+  as `ZSH_RELEASE` at the top of `bin/build`, and `bin/setup` reads it from there.
 
 ### 1. Download zsh source
 
 ```
-curl -L -O https://www.zsh.org/pub/zsh-5.9.tar.xz
-tar xf zsh-5.9.tar.xz
+curl -L -O https://www.zsh.org/pub/zsh-5.9.2.tar.xz
+tar xf zsh-5.9.2.tar.xz
+```
+
+🚨 **`zsh.org/pub/` keeps only the CURRENT release.** Every older one moves to
+`pub/old/`, so this command starts returning 404 the day zsh ships its next
+version — which is what happened to the 5.9 line here, and what will happen to
+this one:
+
+```sh
+curl -L -O https://www.zsh.org/pub/old/zsh-5.9.2.tar.xz   # once 5.9.2 is not current
 ```
 
 ### 2. Build the ncurses stub
@@ -87,8 +97,8 @@ cd ..
 mkdir -p build-zsh
 cd build-zsh
 STUB="$(pwd)/../ncurses-stub"
-emconfigure ../zsh-5.9/configure \
-  --build="$(../zsh-5.9/config.guess)" \
+emconfigure ../zsh-5.9.2/configure \
+  --build="$(../zsh-5.9.2/config.guess)" \
   --host=wasm32-unknown-emscripten \
   --disable-dynamic \
   --without-tcsetpgrp \
@@ -129,11 +139,11 @@ First, patch the source to remove a spurious dependency on the complete module:
 
 ```
 # zutil.mdd: remove moddeps="zsh/complete" line
-sed -i '' '/^moddeps="zsh\/complete"$/d' ../zsh-5.9/Src/Modules/zutil.mdd
+sed -i '' '/^moddeps="zsh\/complete"$/d' ../zsh-5.9.2/Src/Modules/zutil.mdd
 
 # zutil.c: inline the one call that depended on complete
 sed -i '' 's/set_list_array(args\[1\], zstyle_list);/setaparam(args[1], zlinklist2array(zstyle_list, 1));/' \
-  ../zsh-5.9/Src/Modules/zutil.c
+  ../zsh-5.9.2/Src/Modules/zutil.c
 ```
 
 Then deactivate the modules in config.modules:
@@ -204,8 +214,8 @@ for src in sed_embed main compile misc process; do
   emcc -Os -c "$SED_SRC/${src}.c" -o "$SED_BUILD/sed_${src}.o" -I"$SED_SRC"
 done
 emcc -Os -c "$SED_SRC/sed_mod.c" -o "$SED_BUILD/sed_mod.o" \
-  -I. -I../Src -I"$(pwd)/../../zsh-5.9/Src" \
-  -I"$(pwd)/../../zsh-5.9/Src/Modules" -I"$SED_SRC" -DHAVE_CONFIG_H
+  -I. -I../Src -I"$(pwd)/../../zsh-5.9.2/Src" \
+  -I"$(pwd)/../../zsh-5.9.2/Src/Modules" -I"$SED_SRC" -DHAVE_CONFIG_H
 
 # Enable zsh/sed in config.modules, then build
 sed -i '' -E \
@@ -306,7 +316,7 @@ bin/build           # rebuild and deploy (steps 5c–7): make prep, patch config
 bin/patch-config    # patch config.h only — run after any make prep wipes it
 ```
 
-After downloading `zsh-5.9/` (step 1), the full workflow is just:
+After downloading `zsh-5.9.2/` (step 1), the full workflow is just:
 
 ```
 bin/setup
@@ -577,7 +587,7 @@ package and should travel with the binary anywhere it is redistributed:
 
 | Component    | Source             | License                    |
 | ------------ | ------------------ | -------------------------- |
-| zsh 5.9      | zsh-users          | Zsh License                |
+| zsh 5.9.2    | zsh-users          | Zsh License                |
 | `sed`        | OpenBSD sed        | 3-clause BSD               |
 | `awk`        | one-true-awk (BWK) | MIT-style (Lucent)         |
 | `bc`, `dc`   | Gavin Howard bc    | 2-clause BSD               |

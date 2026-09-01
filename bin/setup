@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
 # One-time initial setup for building zsh-wasm.
-# Run from the project root after downloading zsh-5.9 source (see README step 1).
+# Run from the project root after downloading the zsh source (see README step 1).
 # Idempotent — safe to run again if a previous attempt was incomplete.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 STUB="$ROOT/ncurses-stub"
-SRC="$ROOT/zsh-5.9"
 BUILD="$ROOT/build-zsh"
+
+# 🚨 THE ZSH RELEASE IS NAMED ONCE, HERE. It used to be spelled into twenty-six
+# paths across this script and bin/setup, so moving to a new release meant a
+# find-and-replace that had to be right everywhere at once — and a missed one
+# does not fail loudly, it points a compiler at a directory that is not there.
+# Override for a side-by-side build:  ZSH_RELEASE=5.9.1 bin/build
+ZSH_RELEASE="${ZSH_RELEASE:-5.9.2}"
+ZSH_SRC="$ROOT/zsh-$ZSH_RELEASE"
+SRC="$ZSH_SRC"
 
 if [[ ! -d "$SRC" ]]; then
     echo "Error: $SRC not found. Download it first:"
-    echo "  curl -L -O https://www.zsh.org/pub/zsh-5.9.tar.xz && tar xf zsh-5.9.tar.xz"
+    echo "  curl -L -O https://www.zsh.org/pub/zsh-$ZSH_RELEASE.tar.xz && tar xf zsh-$ZSH_RELEASE.tar.xz"
+    echo
+    echo "zsh.org/pub/ keeps only the CURRENT release; anything older is under pub/old/:"
+    echo "  curl -L -O https://www.zsh.org/pub/old/zsh-$ZSH_RELEASE.tar.xz"
     exit 1
 fi
 

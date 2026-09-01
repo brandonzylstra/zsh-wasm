@@ -4,8 +4,9 @@ build-bc/
 build-sbase/
 build-awk/
 build-diff/
-zsh-5.9/
-zsh-5.9.tar.xz
+# The zsh source, whichever release bin/build is set to.
+zsh-[0-9]*/
+zsh-[0-9]*.tar.xz
 bc-7.0.3/
 bc-7.0.3.tar.gz
 awk-20260426/
